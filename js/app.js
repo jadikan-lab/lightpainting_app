@@ -1,4 +1,4 @@
-// Bootstrap : relie caméra, moteur de capture, enregistreur, galerie et navigation d'écrans.
+// Bootstrap : relie caméra, moteur de capture, enregistreur, galerie, paramètres et navigation d'écrans.
 (() => {
   const viewfinder = document.getElementById('viewfinder');
   const accumulator = document.getElementById('accumulator');
@@ -6,15 +6,18 @@
   const resBadge = document.getElementById('res-badge');
   const recIndicator = document.getElementById('rec-indicator');
   const recTimer = document.getElementById('rec-timer');
+  const gridOverlay = document.getElementById('grid-overlay');
 
   const btnSwitchCamera = document.getElementById('btn-switch-camera');
   const btnShutter = document.getElementById('btn-shutter');
   const btnGallery = document.getElementById('btn-gallery');
   const thumbLatest = document.getElementById('thumb-latest');
+  const btnSettings = document.getElementById('btn-settings');
 
   const screenCamera = document.getElementById('screen-camera');
   const screenGallery = document.getElementById('screen-gallery');
   const screenViewer = document.getElementById('screen-viewer');
+  const screenSettings = document.getElementById('screen-settings');
   const btnGalleryClose = document.getElementById('btn-gallery-close');
   const galleryGrid = document.getElementById('gallery-grid');
   const galleryEmpty = document.getElementById('gallery-empty');
@@ -24,6 +27,16 @@
   const btnViewerExport = document.getElementById('btn-viewer-export');
   const viewerMedia = document.getElementById('viewer-media');
 
+  const btnSettingsClose = document.getElementById('btn-settings-close');
+  const segmentPhotoFormat = document.getElementById('segment-photo-format');
+  const toggleGrid = document.getElementById('toggle-grid');
+  const toggleMirror = document.getElementById('toggle-mirror');
+  const toggleHaptics = document.getElementById('toggle-haptics');
+  const storageSummary = document.getElementById('storage-summary');
+  const btnClearGallery = document.getElementById('btn-clear-gallery');
+
+  const ALL_SCREENS = [screenCamera, screenGallery, screenViewer, screenSettings];
+
   let isCapturing = false;
   let recTimerInterval = null;
   let recStartedAt = 0;
@@ -31,7 +44,7 @@
   let currentViewerUrl = null;
 
   function showScreen(name) {
-    for (const el of [screenCamera, screenGallery, screenViewer]) {
+    for (const el of ALL_SCREENS) {
       el.hidden = el.dataset.screen !== name;
     }
   }
@@ -43,11 +56,29 @@
     return `${mm}:${ss}`;
   }
 
+  function formatBytes(bytes) {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  }
+
+  function vibrate(pattern) {
+    if (Settings.get('haptics') && navigator.vibrate) navigator.vibrate(pattern);
+  }
+
   function updateResBadge() {
     const settings = Camera.getSettings();
     resBadge.textContent = settings && settings.width && settings.height
       ? `${settings.width}×${settings.height}`
       : '';
+  }
+
+  function updateMirrorPreview() {
+    const isFrontCamera = Camera.getFacingMode() === 'user';
+    viewfinder.classList.toggle('mirror-preview', isFrontCamera);
+    // Le rendu miroir du canvas ne s'applique que si la photo finale n'est PAS
+    // elle-même retournée : sinon les deux inversions s'annuleraient à l'écran.
+    const shouldMirrorCanvasCss = isFrontCamera && !Settings.get('mirrorFrontFinal');
+    accumulator.classList.toggle('mirror-preview', shouldMirrorCanvasCss);
   }
 
   async function initCamera() {
@@ -57,6 +88,7 @@
       await Camera.init(viewfinder);
       cameraStatus.hidden = true;
       updateResBadge();
+      updateMirrorPreview();
       CaptureEngine.init(viewfinder, accumulator);
     } catch (err) {
       cameraStatus.hidden = false;
@@ -79,6 +111,7 @@
     btnShutter.setAttribute('aria-label', active ? 'Arrêter la capture' : 'Démarrer la capture');
     btnSwitchCamera.disabled = active;
     btnGallery.disabled = active;
+    btnSettings.disabled = active;
     recIndicator.hidden = !active;
     accumulator.classList.toggle('is-live', active);
 
@@ -96,13 +129,16 @@
 
   async function startCapture() {
     if (isCapturing) return;
+    vibrate(15);
     setCapturingUI(true);
-    CaptureEngine.start();
+    const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
+    CaptureEngine.start({ mirror, format: Settings.get('photoFormat') });
     Recorder.start(Camera.getStream());
   }
 
   async function stopCapture() {
     if (!isCapturing) return;
+    vibrate([12, 40, 12]);
     setCapturingUI(false);
 
     const [photoBlob, videoResult] = await Promise.all([
@@ -112,7 +148,7 @@
 
     if (photoBlob) {
       const thumb = await Gallery.createPhotoThumbnail(photoBlob);
-      await MediaDB.addMedia({ type: 'photo', blob: photoBlob, thumbnail: thumb, mimeType: 'image/jpeg' });
+      await MediaDB.addMedia({ type: 'photo', blob: photoBlob, thumbnail: thumb, mimeType: photoBlob.type });
     }
     if (videoResult && videoResult.blob) {
       const thumb = await Gallery.createVideoThumbnail(videoResult.blob).catch(() => null);
@@ -143,9 +179,28 @@
     Gallery.renderGrid(galleryGrid, galleryEmpty, openViewer);
   }
 
+  async function refreshStorageSummary() {
+    const { count, bytes } = await MediaDB.getStorageStats();
+    storageSummary.textContent = count === 0
+      ? 'Aucun média stocké.'
+      : `${count} média${count > 1 ? 's' : ''} · ${formatBytes(bytes)} utilisés sur cet appareil.`;
+  }
+
+  function applySettingsToUI() {
+    const values = Settings.getAll();
+    for (const btn of segmentPhotoFormat.children) {
+      btn.classList.toggle('is-active', btn.dataset.value === values.photoFormat);
+    }
+    toggleGrid.checked = values.gridOverlay;
+    toggleMirror.checked = values.mirrorFrontFinal;
+    toggleHaptics.checked = values.haptics;
+    gridOverlay.hidden = !values.gridOverlay;
+  }
+
   btnSwitchCamera.addEventListener('click', async () => {
     await Camera.switchCamera();
     updateResBadge();
+    updateMirrorPreview();
   });
 
   btnShutter.addEventListener('click', () => {
@@ -174,12 +229,49 @@
     if (currentViewerMedia) Gallery.exportMedia(currentViewerMedia);
   });
 
+  btnSettings.addEventListener('click', () => {
+    applySettingsToUI();
+    refreshStorageSummary();
+    showScreen('settings');
+  });
+
+  btnSettingsClose.addEventListener('click', () => showScreen('camera'));
+
+  segmentPhotoFormat.addEventListener('click', (e) => {
+    const btn = e.target.closest('.segmented-btn');
+    if (!btn) return;
+    Settings.set('photoFormat', btn.dataset.value);
+    applySettingsToUI();
+  });
+
+  toggleGrid.addEventListener('change', () => {
+    Settings.set('gridOverlay', toggleGrid.checked);
+    gridOverlay.hidden = !toggleGrid.checked;
+  });
+
+  toggleMirror.addEventListener('change', () => {
+    Settings.set('mirrorFrontFinal', toggleMirror.checked);
+    updateMirrorPreview();
+  });
+
+  toggleHaptics.addEventListener('change', () => {
+    Settings.set('haptics', toggleHaptics.checked);
+  });
+
+  btnClearGallery.addEventListener('click', async () => {
+    if (!window.confirm('Supprimer toutes les photos et vidéos de la galerie ? Cette action est irréversible.')) return;
+    await MediaDB.clearAll();
+    thumbLatest.hidden = true;
+    await refreshStorageSummary();
+  });
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });
   }
 
+  gridOverlay.hidden = !Settings.get('gridOverlay');
   initCamera();
   refreshLatestThumb();
 })();

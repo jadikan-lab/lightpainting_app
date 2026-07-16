@@ -95,7 +95,9 @@ const Gallery = (() => {
   }
 
   async function exportMedia(media) {
-    const ext = media.type === 'photo' ? 'jpg' : (media.mimeType && media.mimeType.includes('mp4') ? 'mp4' : 'webm');
+    const ext = media.type === 'photo'
+      ? (media.mimeType && media.mimeType.includes('png') ? 'png' : 'jpg')
+      : (media.mimeType && media.mimeType.includes('mp4') ? 'mp4' : 'webm');
     const filename = `lightpainting-${media.createdAt}.${ext}`;
     const file = new File([media.blob], filename, { type: media.blob.type || media.mimeType });
 

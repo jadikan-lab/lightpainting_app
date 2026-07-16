@@ -56,6 +56,17 @@ const MediaDB = (() => {
     });
   }
 
+  async function getStorageStats() {
+    const items = await getAllMedia();
+    const bytes = items.reduce((sum, item) => sum + (item.blob?.size || 0) + (item.thumbnail?.size || 0), 0);
+    return { count: items.length, bytes };
+  }
+
+  async function clearAll() {
+    const items = await getAllMedia();
+    for (const item of items) await deleteMedia(item.id);
+  }
+
   async function deleteMedia(id) {
     const db = await open();
     return new Promise((resolve, reject) => {
@@ -66,5 +77,5 @@ const MediaDB = (() => {
     });
   }
 
-  return { addMedia, getAllMedia, getMedia, deleteMedia };
+  return { addMedia, getAllMedia, getMedia, deleteMedia, getStorageStats, clearAll };
 })();

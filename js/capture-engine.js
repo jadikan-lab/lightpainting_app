@@ -7,6 +7,8 @@ const CaptureEngine = (() => {
   let rafId = null;
   let running = false;
   let starting = false;
+  let mirror = false;
+  let outputFormat = 'image/jpeg';
 
   function init(video, canvas) {
     videoEl = video;
@@ -25,13 +27,21 @@ const CaptureEngine = (() => {
 
   function drawFrame() {
     ctx.globalCompositeOperation = 'lighten';
+    ctx.save();
+    if (mirror) {
+      ctx.translate(canvasEl.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+    ctx.restore();
     rafId = requestAnimationFrame(drawFrame);
   }
 
-  function start() {
+  function start({ mirror: mirrorFlip = false, format = 'jpeg' } = {}) {
     if (running || starting) return;
     starting = true;
+    mirror = mirrorFlip;
+    outputFormat = format === 'png' ? 'image/png' : 'image/jpeg';
 
     const tryStart = () => {
       if (!resizeToVideoResolution()) {
@@ -54,7 +64,7 @@ const CaptureEngine = (() => {
     starting = false;
     cancelAnimationFrame(rafId);
     return new Promise((resolve) => {
-      canvasEl.toBlob((blob) => resolve(blob), 'image/jpeg', 1.0);
+      canvasEl.toBlob((blob) => resolve(blob), outputFormat, 1.0);
     });
   }
 
