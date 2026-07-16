@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="Lightpainting" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css" />
+  <title>Lightpainting</title>
+</head>
+<body>
+  <div id="app">
+
+    <!-- Viewfinder screen -->
+    <main id="screen-camera" class="screen" data-screen="camera">
+      <div class="viewfinder-wrap">
+        <video id="viewfinder" autoplay playsinline muted></video>
+        <canvas id="accumulator"></canvas>
+        <div id="rec-indicator" class="rec-indicator" hidden>
+          <span class="rec-dot"></span>
+          <span id="rec-timer">00:00</span>
+        </div>
+        <p id="camera-status" class="camera-status" hidden></p>
+      </div>
+
+      <div class="hud-top safe-top">
+        <button id="btn-switch-camera" class="icon-btn" type="button" aria-label="Changer de caméra">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M17 2l3 3-3 3M20 5H8a5 5 0 0 0-5 5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 22l-3-3 3-3M4 19h12a5 5 0 0 0 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span id="res-badge" class="res-badge"></span>
+      </div>
+
+      <div class="hud-bottom safe-bottom">
+        <button id="btn-gallery" class="thumb-btn" type="button" aria-label="Ouvrir la galerie">
+          <img id="thumb-latest" alt="" hidden />
+        </button>
+
+        <button id="btn-shutter" class="shutter-btn" type="button" aria-label="Démarrer la capture">
+          <span class="shutter-ring"></span>
+        </button>
+
+        <div class="hud-bottom-spacer" aria-hidden="true"></div>
+      </div>
+    </main>
+
+    <!-- Gallery grid -->
+    <section id="screen-gallery" class="screen" data-screen="gallery" hidden>
+      <header class="screen-header safe-top">
+        <button id="btn-gallery-close" class="icon-btn" type="button" aria-label="Fermer la galerie">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <h1>Galerie</h1>
+        <span class="header-spacer"></span>
+      </header>
+      <div id="gallery-grid" class="gallery-grid"></div>
+      <p id="gallery-empty" class="gallery-empty" hidden>Aucune capture pour l'instant.</p>
+    </section>
+
+    <!-- Fullscreen media viewer -->
+    <section id="screen-viewer" class="screen" data-screen="viewer" hidden>
+      <header class="screen-header safe-top">
+        <button id="btn-viewer-close" class="icon-btn" type="button" aria-label="Retour">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="header-spacer"></span>
+        <button id="btn-viewer-delete" class="icon-btn" type="button" aria-label="Supprimer">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+      <div id="viewer-media" class="viewer-media"></div>
+      <div class="viewer-actions safe-bottom">
+        <button id="btn-viewer-export" class="pill-btn" type="button">Exporter</button>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="js/db.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/capture-engine.js"></script>
+  <script src="js/recorder.js"></script>
+  <script src="js/gallery.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
