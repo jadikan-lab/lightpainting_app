@@ -13,6 +13,11 @@ const Settings = (() => {
     haptics: true,
     motionMask: false,
     motionSensitivity: 'medium', // 'low' | 'medium' | 'high'
+    // Enregistrer la vidéo brute du processus en même temps que la capture
+    // fait concourir l'encodeur avec la boucle de composition du canvas pour
+    // les mêmes ressources — désactivé par défaut pour garantir des trainées
+    // nettes, activable pour les appareils qui encaissent les deux à la fois.
+    videoRecordingEnabled: false,
     timelapseEnabled: true,
   };
 

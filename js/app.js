@@ -34,6 +34,7 @@
   const viewerMedia = document.getElementById('viewer-media');
 
   const btnSettingsClose = document.getElementById('btn-settings-close');
+  const toggleVideoRecording = document.getElementById('toggle-video-recording');
   const segmentPhotoFormat = document.getElementById('segment-photo-format');
   const toggleGrid = document.getElementById('toggle-grid');
   const toggleMirror = document.getElementById('toggle-mirror');
@@ -149,7 +150,7 @@
       motionMask: Settings.get('motionMask'),
       sensitivity: Settings.get('motionSensitivity'),
     });
-    Recorder.start(Camera.getStream());
+    if (Settings.get('videoRecordingEnabled')) Recorder.start(Camera.getStream());
     if (Settings.get('timelapseEnabled')) Timelapse.startCollecting(accumulator);
   }
 
@@ -261,6 +262,7 @@
 
   function applySettingsToUI() {
     const values = Settings.getAll();
+    toggleVideoRecording.checked = values.videoRecordingEnabled;
     for (const btn of segmentPhotoFormat.children) {
       btn.classList.toggle('is-active', btn.dataset.value === values.photoFormat);
     }
@@ -336,6 +338,10 @@
   });
 
   btnSettingsClose.addEventListener('click', () => showScreen('camera'));
+
+  toggleVideoRecording.addEventListener('change', () => {
+    Settings.set('videoRecordingEnabled', toggleVideoRecording.checked);
+  });
 
   segmentPhotoFormat.addEventListener('click', (e) => {
     const btn = e.target.closest('.segmented-btn');

@@ -9,8 +9,13 @@ const Camera = (() => {
       audio: false,
       video: {
         facingMode: { ideal: mode },
-        width: { ideal: 4096 },
-        height: { ideal: 2160 },
+        // Le canvas d'accumulation recompose chaque frame en pleine résolution ;
+        // au-delà du Full HD, le coût par frame fait chuter le débit d'images
+        // en dessous de ce qu'il faut pour une trainée continue (visible sur
+        // certains téléphones sous forme de points isolés au lieu d'un trait).
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30, max: 30 },
       },
     };
   }
