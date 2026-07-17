@@ -1,13 +1,17 @@
 // Préférences utilisateur, persistées en localStorage.
 const Settings = (() => {
   const KEY = 'lightpainting-settings';
+  // v2 : le masque de mouvement s'est révélé peu fiable en conditions réelles
+  // (trainées non accumulées sur certains appareils) — repassé à false par
+  // défaut, et forcé une fois pour les utilisateurs ayant déjà la v1 stockée.
+  const SETTINGS_VERSION = 2;
 
   const DEFAULTS = {
     photoFormat: 'jpeg', // 'jpeg' | 'png'
     gridOverlay: false,
     mirrorFrontFinal: false,
     haptics: true,
-    motionMask: true,
+    motionMask: false,
     motionSensitivity: 'medium', // 'low' | 'medium' | 'high'
     timelapseEnabled: true,
   };
@@ -15,9 +19,13 @@ const Settings = (() => {
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
-      return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
+      const parsed = raw ? JSON.parse(raw) : {};
+      if ((parsed._version || 1) < SETTINGS_VERSION) {
+        delete parsed.motionMask;
+      }
+      return { ...DEFAULTS, ...parsed, _version: SETTINGS_VERSION };
     } catch {
-      return { ...DEFAULTS };
+      return { ...DEFAULTS, _version: SETTINGS_VERSION };
     }
   }
 
