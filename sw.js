@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lightpainting-shell-v2';
+const CACHE_NAME = 'lightpainting-shell-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -7,8 +7,10 @@ const APP_SHELL = [
   './js/db.js',
   './js/settings.js',
   './js/camera.js',
+  './js/motion-mask.js',
   './js/capture-engine.js',
   './js/recorder.js',
+  './js/timelapse.js',
   './js/gallery.js',
   './js/app.js',
 ];

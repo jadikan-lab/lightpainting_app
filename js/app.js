@@ -21,6 +21,12 @@
   const btnGalleryClose = document.getElementById('btn-gallery-close');
   const galleryGrid = document.getElementById('gallery-grid');
   const galleryEmpty = document.getElementById('gallery-empty');
+  const galleryHeader = document.getElementById('gallery-header');
+  const gallerySelectionBar = document.getElementById('gallery-selection-bar');
+  const selectionCount = document.getElementById('selection-count');
+  const btnSelectionCancel = document.getElementById('btn-selection-cancel');
+  const btnSelectionAll = document.getElementById('btn-selection-all');
+  const btnSelectionDelete = document.getElementById('btn-selection-delete');
 
   const btnViewerClose = document.getElementById('btn-viewer-close');
   const btnViewerDelete = document.getElementById('btn-viewer-delete');
@@ -32,6 +38,9 @@
   const toggleGrid = document.getElementById('toggle-grid');
   const toggleMirror = document.getElementById('toggle-mirror');
   const toggleHaptics = document.getElementById('toggle-haptics');
+  const toggleMotionMask = document.getElementById('toggle-motion-mask');
+  const segmentSensitivity = document.getElementById('segment-sensitivity');
+  const toggleTimelapse = document.getElementById('toggle-timelapse');
   const storageSummary = document.getElementById('storage-summary');
   const btnClearGallery = document.getElementById('btn-clear-gallery');
 
@@ -42,6 +51,8 @@
   let recStartedAt = 0;
   let currentViewerMedia = null;
   let currentViewerUrl = null;
+  let selectionMode = false;
+  let selectedIds = new Set();
 
   function showScreen(name) {
     for (const el of ALL_SCREENS) {
@@ -132,8 +143,14 @@
     vibrate(15);
     setCapturingUI(true);
     const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
-    CaptureEngine.start({ mirror, format: Settings.get('photoFormat') });
+    CaptureEngine.start({
+      mirror,
+      format: Settings.get('photoFormat'),
+      motionMask: Settings.get('motionMask'),
+      sensitivity: Settings.get('motionSensitivity'),
+    });
     Recorder.start(Camera.getStream());
+    if (Settings.get('timelapseEnabled')) Timelapse.startCollecting(accumulator);
   }
 
   async function stopCapture() {
@@ -141,9 +158,20 @@
     vibrate([12, 40, 12]);
     setCapturingUI(false);
 
-    const [photoBlob, videoResult] = await Promise.all([
+    try {
+      await finishCapture();
+    } catch (err) {
+      console.error('stopCapture failed', err);
+    }
+  }
+
+  async function finishCapture() {
+    const timelapseFrames = Settings.get('timelapseEnabled') ? Timelapse.stopCollecting() : null;
+
+    const [photoBlob, videoResult, timelapseResult] = await Promise.all([
       CaptureEngine.stop(),
       Recorder.stop(),
+      timelapseFrames ? Timelapse.build(timelapseFrames) : Promise.resolve(null),
     ]);
 
     if (photoBlob) {
@@ -159,7 +187,52 @@
         mimeType: videoResult.mimeType,
       });
     }
+    if (timelapseResult && timelapseResult.blob) {
+      const thumb = await Gallery.createVideoThumbnail(timelapseResult.blob).catch(() => null);
+      await MediaDB.addMedia({
+        type: 'timelapse',
+        blob: timelapseResult.blob,
+        thumbnail: thumb,
+        mimeType: timelapseResult.mimeType,
+      });
+    }
     await refreshLatestThumb();
+  }
+
+  function updateSelectionUI() {
+    galleryHeader.hidden = selectionMode;
+    gallerySelectionBar.hidden = !selectionMode;
+    selectionCount.textContent = `${selectedIds.size} sélectionné${selectedIds.size > 1 ? 's' : ''}`;
+    btnSelectionDelete.disabled = selectedIds.size === 0;
+    Gallery.setSelectionState(galleryGrid, selectedIds);
+  }
+
+  function enterSelectionMode(id) {
+    selectionMode = true;
+    selectedIds = new Set([id]);
+    vibrate(15);
+    updateSelectionUI();
+  }
+
+  function exitSelectionMode() {
+    selectionMode = false;
+    selectedIds = new Set();
+    updateSelectionUI();
+  }
+
+  function toggleSelection(id) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    if (selectedIds.size === 0) {
+      exitSelectionMode();
+    } else {
+      updateSelectionUI();
+    }
+  }
+
+  function handleCellTap(id) {
+    if (selectionMode) toggleSelection(id);
+    else openViewer(id);
   }
 
   async function openViewer(id) {
@@ -176,7 +249,7 @@
     currentViewerMedia = null;
     viewerMedia.innerHTML = '';
     showScreen('gallery');
-    Gallery.renderGrid(galleryGrid, galleryEmpty, openViewer);
+    Gallery.renderGrid(galleryGrid, galleryEmpty, handleCellTap, enterSelectionMode);
   }
 
   async function refreshStorageSummary() {
@@ -195,6 +268,12 @@
     toggleMirror.checked = values.mirrorFrontFinal;
     toggleHaptics.checked = values.haptics;
     gridOverlay.hidden = !values.gridOverlay;
+
+    toggleMotionMask.checked = values.motionMask;
+    for (const btn of segmentSensitivity.children) {
+      btn.classList.toggle('is-active', btn.dataset.value === values.motionSensitivity);
+    }
+    toggleTimelapse.checked = values.timelapseEnabled;
   }
 
   btnSwitchCamera.addEventListener('click', async () => {
@@ -209,11 +288,32 @@
   });
 
   btnGallery.addEventListener('click', () => {
+    exitSelectionMode();
     showScreen('gallery');
-    Gallery.renderGrid(galleryGrid, galleryEmpty, openViewer);
+    Gallery.renderGrid(galleryGrid, galleryEmpty, handleCellTap, enterSelectionMode);
   });
 
-  btnGalleryClose.addEventListener('click', () => showScreen('camera'));
+  btnGalleryClose.addEventListener('click', () => {
+    exitSelectionMode();
+    showScreen('camera');
+  });
+
+  btnSelectionCancel.addEventListener('click', exitSelectionMode);
+
+  btnSelectionAll.addEventListener('click', () => {
+    selectedIds = new Set([...galleryGrid.children].map((cell) => Number(cell.dataset.id)));
+    updateSelectionUI();
+  });
+
+  btnSelectionDelete.addEventListener('click', async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!window.confirm(`Supprimer ${count} média${count > 1 ? 's' : ''} ? Cette action est irréversible.`)) return;
+    await Promise.all([...selectedIds].map((id) => MediaDB.deleteMedia(id)));
+    exitSelectionMode();
+    await refreshLatestThumb();
+    Gallery.renderGrid(galleryGrid, galleryEmpty, handleCellTap, enterSelectionMode);
+  });
 
   btnViewerClose.addEventListener('click', closeViewer);
 
@@ -256,6 +356,21 @@
 
   toggleHaptics.addEventListener('change', () => {
     Settings.set('haptics', toggleHaptics.checked);
+  });
+
+  toggleMotionMask.addEventListener('change', () => {
+    Settings.set('motionMask', toggleMotionMask.checked);
+  });
+
+  segmentSensitivity.addEventListener('click', (e) => {
+    const btn = e.target.closest('.segmented-btn');
+    if (!btn) return;
+    Settings.set('motionSensitivity', btn.dataset.value);
+    applySettingsToUI();
+  });
+
+  toggleTimelapse.addEventListener('change', () => {
+    Settings.set('timelapseEnabled', toggleTimelapse.checked);
   });
 
   btnClearGallery.addEventListener('click', async () => {

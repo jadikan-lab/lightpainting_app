@@ -308,6 +308,42 @@ body {
   width: 44px;
 }
 
+.selection-bar {
+  background: var(--bg);
+}
+
+.selection-count {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.text-btn {
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 4px;
+}
+
+.text-btn:active {
+  opacity: 0.6;
+}
+
+.icon-btn-danger {
+  color: var(--accent-rec);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+}
+
 .gallery-grid {
   flex: 1;
   overflow-y: auto;
@@ -331,6 +367,36 @@ body {
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.cell-select-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.gallery-cell.is-selected .cell-select-badge {
+  opacity: 1;
+  background: #34c759;
+  border-color: #34c759;
+}
+
+.gallery-cell.is-selected img {
+  opacity: 0.55;
+  transform: scale(0.94);
 }
 
 .cell-badge {

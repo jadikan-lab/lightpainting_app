@@ -7,6 +7,9 @@ const Settings = (() => {
     gridOverlay: false,
     mirrorFrontFinal: false,
     haptics: true,
+    motionMask: true,
+    motionSensitivity: 'medium', // 'low' | 'medium' | 'high'
+    timelapseEnabled: true,
   };
 
   function load() {

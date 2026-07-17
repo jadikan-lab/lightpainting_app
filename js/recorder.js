@@ -42,5 +42,5 @@ const Recorder = (() => {
     return !!mediaRecorder && mediaRecorder.state === 'recording';
   }
 
-  return { start, stop, isRecording };
+  return { start, stop, isRecording, pickMimeType };
 })();

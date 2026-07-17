@@ -44,7 +44,33 @@ const Gallery = (() => {
     });
   }
 
-  async function renderGrid(gridEl, emptyEl, onOpen) {
+  const LONG_PRESS_MS = 450;
+
+  function attachTapAndLongPress(el, id, onOpen, onLongPress) {
+    let timer = null;
+    let longPressFired = false;
+
+    el.addEventListener('pointerdown', () => {
+      longPressFired = false;
+      timer = setTimeout(() => {
+        longPressFired = true;
+        onLongPress(id);
+      }, LONG_PRESS_MS);
+    });
+    const cancelTimer = () => clearTimeout(timer);
+    el.addEventListener('pointerup', cancelTimer);
+    el.addEventListener('pointercancel', cancelTimer);
+    el.addEventListener('pointermove', cancelTimer);
+    el.addEventListener('click', (e) => {
+      if (longPressFired) {
+        e.preventDefault();
+        return;
+      }
+      onOpen(id);
+    });
+  }
+
+  async function renderGrid(gridEl, emptyEl, onOpen, onLongPress) {
     const items = await MediaDB.getAllMedia();
     gridEl.innerHTML = '';
     emptyEl.hidden = items.length > 0;
@@ -53,7 +79,9 @@ const Gallery = (() => {
       const btn = document.createElement('button');
       btn.className = 'gallery-cell';
       btn.type = 'button';
-      btn.setAttribute('aria-label', item.type === 'photo' ? 'Photo' : 'Vidéo');
+      btn.dataset.id = item.id;
+      const labels = { photo: 'Photo', video: 'Vidéo', timelapse: 'Timelapse' };
+      btn.setAttribute('aria-label', labels[item.type] || 'Média');
 
       const img = document.createElement('img');
       img.src = URL.createObjectURL(item.thumbnail || item.blob);
@@ -61,15 +89,26 @@ const Gallery = (() => {
       img.alt = '';
       btn.appendChild(img);
 
-      if (item.type === 'video') {
+      if (item.type === 'video' || item.type === 'timelapse') {
         const badge = document.createElement('span');
         badge.className = 'cell-badge';
-        badge.innerHTML = '&#9654;';
+        badge.innerHTML = item.type === 'timelapse' ? '&#9193;' : '&#9654;';
         btn.appendChild(badge);
       }
 
-      btn.addEventListener('click', () => onOpen(item.id));
+      const selectBadge = document.createElement('span');
+      selectBadge.className = 'cell-select-badge';
+      selectBadge.innerHTML = '&#10003;';
+      btn.appendChild(selectBadge);
+
+      attachTapAndLongPress(btn, item.id, onOpen, onLongPress);
       gridEl.appendChild(btn);
+    }
+  }
+
+  function setSelectionState(gridEl, selectedIds) {
+    for (const cell of gridEl.children) {
+      cell.classList.toggle('is-selected', selectedIds.has(Number(cell.dataset.id)));
     }
   }
 
@@ -121,5 +160,5 @@ const Gallery = (() => {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
-  return { createPhotoThumbnail, createVideoThumbnail, renderGrid, renderViewer, exportMedia };
+  return { createPhotoThumbnail, createVideoThumbnail, renderGrid, setSelectionState, renderViewer, exportMedia };
 })();

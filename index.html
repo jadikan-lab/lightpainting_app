@@ -67,7 +67,7 @@
 
     <!-- Gallery grid -->
     <section id="screen-gallery" class="screen" data-screen="gallery" hidden>
-      <header class="screen-header safe-top">
+      <header id="gallery-header" class="screen-header safe-top">
         <button id="btn-gallery-close" class="icon-btn" type="button" aria-label="Fermer la galerie">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>
@@ -75,6 +75,22 @@
         </button>
         <h1>Galerie</h1>
         <span class="header-spacer"></span>
+      </header>
+      <header id="gallery-selection-bar" class="screen-header selection-bar safe-top" hidden>
+        <button id="btn-selection-cancel" class="icon-btn" type="button" aria-label="Annuler la sélection">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <span id="selection-count" class="selection-count">0 sélectionné</span>
+        <div class="selection-actions">
+          <button id="btn-selection-all" class="text-btn" type="button">Tout</button>
+          <button id="btn-selection-delete" class="icon-btn icon-btn-danger" type="button" aria-label="Supprimer la sélection">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </header>
       <div id="gallery-grid" class="gallery-grid"></div>
       <p id="gallery-empty" class="gallery-empty" hidden>Aucune capture pour l'instant.</p>
@@ -151,6 +167,37 @@
         </div>
 
         <div class="settings-section">
+          <h2 class="settings-section-title">Rendu des trainées</h2>
+
+          <label class="settings-row">
+            <span class="settings-row-label">
+              Masque de mouvement
+              <span class="settings-row-hint">Fond stable, seule la trainée s'accumule</span>
+            </span>
+            <input type="checkbox" id="toggle-motion-mask" class="switch-input" />
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+
+          <div class="settings-row">
+            <span class="settings-row-label">Sensibilité</span>
+            <div id="segment-sensitivity" class="segmented" role="group" aria-label="Sensibilité du masque">
+              <button type="button" class="segmented-btn" data-value="low">Faible</button>
+              <button type="button" class="segmented-btn" data-value="medium">Moyenne</button>
+              <button type="button" class="segmented-btn" data-value="high">Élevée</button>
+            </div>
+          </div>
+
+          <label class="settings-row">
+            <span class="settings-row-label">
+              Vidéo accélérée
+              <span class="settings-row-hint">Timelapse de la construction de la trainée</span>
+            </span>
+            <input type="checkbox" id="toggle-timelapse" class="switch-input" />
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <div class="settings-section">
           <h2 class="settings-section-title">Stockage</h2>
           <p id="storage-summary" class="settings-hint-text">—</p>
           <button id="btn-clear-gallery" class="danger-btn" type="button">Vider la galerie</button>
@@ -165,8 +212,10 @@
   <script src="js/db.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/camera.js"></script>
+  <script src="js/motion-mask.js"></script>
   <script src="js/capture-engine.js"></script>
   <script src="js/recorder.js"></script>
+  <script src="js/timelapse.js"></script>
   <script src="js/gallery.js"></script>
   <script src="js/app.js"></script>
 </body>
