@@ -87,9 +87,17 @@ const CaptureEngine = (() => {
     ctx.globalCompositeOperation = 'destination-over';
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
-    return new Promise((resolve) => {
+    // toBlob() capture une copie du bitmap au moment de l'appel (l'encodage
+    // async qui suit ne voit plus les changements ultérieurs) : on peut donc
+    // vider le canvas juste après sans risque, pour que l'écran caméra
+    // reparte sur une vidéo live propre — sinon la trainée précédente
+    // resterait visible (via le fondu) jusqu'à la prochaine capture, y
+    // compris après un "Refaire".
+    const blobPromise = new Promise((resolve) => {
       canvasEl.toBlob((blob) => resolve(blob), outputFormat, 1.0);
     });
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    return blobPromise;
   }
 
   function isRunning() {
