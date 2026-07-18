@@ -20,11 +20,17 @@ const CaptureEngine = (() => {
   let useMotionMask = false;
   let maskSensitivity = 'medium';
   let settleTimeoutId = null;
+  let frameCount = 0;
 
   function init(video, canvas) {
     videoEl = video;
     canvasEl = canvas;
-    ctx = canvasEl.getContext('2d', { alpha: false });
+    // Pas de { alpha: false } ici : certains moteurs WebKit se comportent
+    // différemment avec globalCompositeOperation "lighten" sur un contexte
+    // opaque. Le canvas est de toute façon rempli en opaque dès le départ
+    // (fond noir ou frame de fond), donc l'alpha réelle n'a pas d'incidence
+    // visuelle — seule la garantie de compatibilité change.
+    ctx = canvasEl.getContext('2d');
     tempCanvas = document.createElement('canvas');
     tempCtx = tempCanvas.getContext('2d', { alpha: true });
   }
@@ -53,6 +59,7 @@ const CaptureEngine = (() => {
   function drawFrame() {
     ctx.globalCompositeOperation = 'lighten';
     withMirror(() => ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height));
+    frameCount++;
     rafId = requestAnimationFrame(drawFrame);
   }
 
@@ -67,6 +74,7 @@ const CaptureEngine = (() => {
 
     ctx.globalCompositeOperation = 'lighten';
     withMirror(() => ctx.drawImage(tempCanvas, 0, 0));
+    frameCount++;
     rafId = requestAnimationFrame(drawFrameMasked);
   }
 
@@ -82,6 +90,7 @@ const CaptureEngine = (() => {
     outputFormat = format === 'png' ? 'image/png' : 'image/jpeg';
     useMotionMask = motionMask;
     maskSensitivity = sensitivity;
+    frameCount = 0;
 
     const beginLoop = () => {
       running = true;
@@ -139,5 +148,9 @@ const CaptureEngine = (() => {
     return running;
   }
 
-  return { init, start, stop, isRunning };
+  function getFrameCount() {
+    return frameCount;
+  }
+
+  return { init, start, stop, isRunning, getFrameCount };
 })();

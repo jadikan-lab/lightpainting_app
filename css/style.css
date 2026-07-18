@@ -283,6 +283,10 @@ body {
   animation: pulse 1s ease-in-out infinite;
 }
 
+.rec-frame-count {
+  color: var(--fg-dim);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }

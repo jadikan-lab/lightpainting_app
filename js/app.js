@@ -6,6 +6,7 @@
   const resBadge = document.getElementById('res-badge');
   const recIndicator = document.getElementById('rec-indicator');
   const recTimer = document.getElementById('rec-timer');
+  const recFrameCount = document.getElementById('rec-frame-count');
   const gridOverlay = document.getElementById('grid-overlay');
 
   const btnSwitchCamera = document.getElementById('btn-switch-camera');
@@ -130,8 +131,11 @@
     if (active) {
       recStartedAt = Date.now();
       recTimer.textContent = '00:00';
+      recFrameCount.textContent = '· 0 frame';
       recTimerInterval = setInterval(() => {
         recTimer.textContent = formatTimer(Date.now() - recStartedAt);
+        const frames = CaptureEngine.getFrameCount();
+        recFrameCount.textContent = `· ${frames} frame${frames > 1 ? 's' : ''}`;
       }, 500);
     } else {
       clearInterval(recTimerInterval);
