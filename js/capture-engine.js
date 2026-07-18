@@ -21,7 +21,7 @@
 const CaptureEngine = (() => {
   const RESIZE_TIMEOUT_MS = 4000;
   const BACKGROUND_SETTLE_MS = 300;
-  const PREVIEW_INTERVAL_MS = 400;
+  const PREVIEW_INTERVAL_MS = 250;
   const MASK_WORK_WIDTH = 192;
   const MASK_NOISE_FLOOR = 10;
   const MASK_SENSITIVITY_GAIN = { low: 2.2, medium: 3.5, high: 5.5 };
@@ -125,7 +125,11 @@ const CaptureEngine = (() => {
     const accumData = smallAccumCtx.getImageData(0, 0, smallW, smallH);
     const bgData = smallBgCtx.getImageData(0, 0, smallW, smallH);
     const maskData = smallAccumCtx.createImageData(smallW, smallH);
-    const gain = MASK_SENSITIVITY_GAIN[maskSensitivity] || MASK_SENSITIVITY_GAIN.medium;
+    // Mode Pro : maskSensitivity peut être un nombre (curseur continu) en
+    // plus des 3 préréglages faible/moyenne/élevée.
+    const gain = typeof maskSensitivity === 'number'
+      ? maskSensitivity
+      : (MASK_SENSITIVITY_GAIN[maskSensitivity] || MASK_SENSITIVITY_GAIN.medium);
 
     const a = accumData.data;
     const b = bgData.data;
@@ -269,5 +273,12 @@ const CaptureEngine = (() => {
     return frameCount;
   }
 
-  return { init, start, stop, isRunning, getFrameCount };
+  // Mode Pro : ajuste la sensibilité pendant une capture en cours — prise en
+  // compte dès le prochain rafraîchissement de l'aperçu live (et à l'export
+  // si la capture s'arrête avant le prochain tick).
+  function setSensitivity(value) {
+    maskSensitivity = value;
+  }
+
+  return { init, start, stop, isRunning, getFrameCount, setSensitivity };
 })();

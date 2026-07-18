@@ -28,6 +28,8 @@ const Settings = (() => {
     // 'longexposure' (pose longue, sans masque) | 'olympus' (fond figé,
     // façon Live Composite) | 'videotrace' (fond live + trainée isolée)
     shootingMode: 'longexposure',
+    proMode: false, // affiche le curseur de sensibilité réglable pendant la capture
+    maskSensitivityValue: 3.5, // équivalent au préréglage "moyenne"
   };
 
   function load() {

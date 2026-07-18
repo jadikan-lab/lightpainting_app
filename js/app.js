@@ -12,6 +12,8 @@
   const countdownOverlay = document.getElementById('countdown-overlay');
   const countdownNumber = document.getElementById('countdown-number');
   const zoomSlider = document.getElementById('zoom-slider');
+  const modeSwitcher = document.getElementById('mode-switcher');
+  const sensitivitySlider = document.getElementById('sensitivity-slider');
 
   const btnSwitchCamera = document.getElementById('btn-switch-camera');
   const btnTorch = document.getElementById('btn-torch');
@@ -55,6 +57,7 @@
   const toggleGrid = document.getElementById('toggle-grid');
   const toggleMirror = document.getElementById('toggle-mirror');
   const toggleTimelapse = document.getElementById('toggle-timelapse');
+  const toggleProMode = document.getElementById('toggle-pro-mode');
   const storageSummary = document.getElementById('storage-summary');
   const btnClearGallery = document.getElementById('btn-clear-gallery');
 
@@ -170,6 +173,7 @@
     btnGallery.disabled = active;
     btnSettings.disabled = active;
     recIndicator.hidden = !active;
+    for (const btn of modeSwitcher.children) btn.disabled = active;
 
     if (active) {
       recStartedAt = Date.now();
@@ -258,11 +262,12 @@
     const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
     const captureStyle = Settings.get('shootingMode');
     previewOverlay.hidden = captureStyle === 'longexposure';
+    const sensitivity = Settings.get('proMode') ? Settings.get('maskSensitivityValue') : 'medium';
     CaptureEngine.start({
       mirror,
       format: Settings.get('photoFormat'),
       captureStyle,
-      sensitivity: 'medium',
+      sensitivity,
       onError: handleCaptureStartError,
     });
     if (Settings.get('videoRecordingEnabled')) Recorder.start(Camera.getStream());
@@ -521,13 +526,29 @@
       : `${count} média${count > 1 ? 's' : ''} · ${formatBytes(bytes)} utilisés sur cet appareil.`;
   }
 
-  function applySettingsToUI() {
+  // Synchronise le mode de capture (et le curseur de sensibilité en mode
+  // Pro) sur les deux sélecteurs qui existent maintenant — celui des
+  // Paramètres et celui, plus rapide d'accès, de l'écran caméra.
+  function updateModeUI() {
     const values = Settings.getAll();
-    toggleVideoRecording.checked = values.videoRecordingEnabled;
     for (const btn of segmentShootingMode.children) {
       btn.classList.toggle('is-active', btn.dataset.value === values.shootingMode);
     }
+    for (const btn of modeSwitcher.children) {
+      btn.classList.toggle('is-active', btn.dataset.value === values.shootingMode);
+    }
     shootingModeHint.textContent = SHOOTING_MODE_HINTS[values.shootingMode] || SHOOTING_MODE_HINTS.longexposure;
+    toggleProMode.checked = values.proMode;
+
+    const maskingModeActive = values.shootingMode === 'olympus' || values.shootingMode === 'videotrace';
+    sensitivitySlider.hidden = !(values.proMode && maskingModeActive);
+    sensitivitySlider.value = values.maskSensitivityValue;
+  }
+
+  function applySettingsToUI() {
+    const values = Settings.getAll();
+    toggleVideoRecording.checked = values.videoRecordingEnabled;
+    updateModeUI();
     for (const btn of segmentPhotoFormat.children) {
       btn.classList.toggle('is-active', btn.dataset.value === values.photoFormat);
     }
@@ -643,6 +664,24 @@
     applySettingsToUI();
   });
 
+  modeSwitcher.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-switcher-btn');
+    if (!btn || isCapturing) return;
+    Settings.set('shootingMode', btn.dataset.value);
+    updateModeUI();
+  });
+
+  toggleProMode.addEventListener('change', () => {
+    Settings.set('proMode', toggleProMode.checked);
+    updateModeUI();
+  });
+
+  sensitivitySlider.addEventListener('input', () => {
+    const value = Number(sensitivitySlider.value);
+    Settings.set('maskSensitivityValue', value);
+    CaptureEngine.setSensitivity(value);
+  });
+
   segmentPhotoFormat.addEventListener('click', (e) => {
     const btn = e.target.closest('.segmented-btn');
     if (!btn) return;
@@ -686,6 +725,7 @@
   }
 
   gridOverlay.hidden = !Settings.get('gridOverlay');
+  updateModeUI();
   initCamera();
   refreshLatestThumb();
 })();

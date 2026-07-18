@@ -172,8 +172,16 @@ body {
   bottom: 0;
   z-index: 2;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.hud-bottom-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   padding-left: 28px;
   padding-right: 28px;
 }
@@ -181,6 +189,41 @@ body {
 .hud-bottom-spacer {
   width: 52px;
   height: 52px;
+}
+
+.mode-switcher {
+  display: flex;
+  gap: 6px;
+  background: var(--surface);
+  backdrop-filter: blur(6px);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.mode-switcher-btn {
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mode-switcher-btn.is-active {
+  background: var(--fg);
+  color: #0a0a0a;
+}
+
+.mode-switcher-btn:disabled {
+  opacity: 0.4;
+}
+
+.sensitivity-slider {
+  width: min(280px, 70vw);
+  accent-color: var(--fg);
 }
 
 .hud-top-left,

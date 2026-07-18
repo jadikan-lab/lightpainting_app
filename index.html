@@ -66,15 +66,23 @@
       </div>
 
       <div class="hud-bottom safe-bottom">
-        <button id="btn-gallery" class="thumb-btn" type="button" aria-label="Ouvrir la galerie">
-          <img id="thumb-latest" alt="" hidden />
-        </button>
+        <input id="sensitivity-slider" class="sensitivity-slider" type="range" min="1" max="8" step="0.1" value="3.5" hidden aria-label="Sensibilité du masque" />
+        <div id="mode-switcher" class="mode-switcher" role="group" aria-label="Mode de capture">
+          <button type="button" class="mode-switcher-btn" data-value="longexposure">Pose longue</button>
+          <button type="button" class="mode-switcher-btn" data-value="olympus">Trainées nettes</button>
+          <button type="button" class="mode-switcher-btn" data-value="videotrace">Vidéo + trace</button>
+        </div>
+        <div class="hud-bottom-row">
+          <button id="btn-gallery" class="thumb-btn" type="button" aria-label="Ouvrir la galerie">
+            <img id="thumb-latest" alt="" hidden />
+          </button>
 
-        <button id="btn-shutter" class="shutter-btn" type="button" aria-label="Démarrer la capture">
-          <span class="shutter-ring"></span>
-        </button>
+          <button id="btn-shutter" class="shutter-btn" type="button" aria-label="Démarrer la capture">
+            <span class="shutter-ring"></span>
+          </button>
 
-        <div class="hud-bottom-spacer" aria-hidden="true"></div>
+          <div class="hud-bottom-spacer" aria-hidden="true"></div>
+        </div>
       </div>
     </main>
 
@@ -172,6 +180,15 @@
               <button type="button" class="segmented-btn" data-value="videotrace">Vidéo + trace</button>
             </div>
           </div>
+
+          <label class="settings-row">
+            <span class="settings-row-label">
+              Mode Pro
+              <span class="settings-row-hint">Curseur de sensibilité du masque, réglable pendant la capture</span>
+            </span>
+            <input type="checkbox" id="toggle-pro-mode" class="switch-input" />
+            <span class="switch" aria-hidden="true"></span>
+          </label>
 
           <div class="settings-row">
             <span class="settings-row-label">
