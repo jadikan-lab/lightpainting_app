@@ -153,11 +153,13 @@
     }
   }
 
+  let latestThumbUrl = null;
   async function refreshLatestThumb() {
     const items = await MediaDB.getAllMedia();
     if (items.length > 0) {
-      const url = URL.createObjectURL(items[0].thumbnail || items[0].blob);
-      thumbLatest.src = url;
+      if (latestThumbUrl) URL.revokeObjectURL(latestThumbUrl);
+      latestThumbUrl = URL.createObjectURL(items[0].thumbnail || items[0].blob);
+      thumbLatest.src = latestThumbUrl;
       thumbLatest.hidden = false;
     }
   }
@@ -189,6 +191,7 @@
   function handleCaptureStartError() {
     if (!isCapturing) return;
     setCapturingUI(false);
+    releaseWakeLock();
     Camera.unlockAutoAdjustments();
     if (Recorder.isRecording()) Recorder.stop();
     Timelapse.stopCollecting();
@@ -227,12 +230,30 @@
     else startCapture();
   }
 
+  // Empêche le verrouillage de l'écran pendant une capture : sur une pose
+  // longue de plusieurs minutes, l'extinction auto de l'écran couperait le
+  // flux caméra et ruinerait la prise. Repli silencieux si non supporté.
+  let wakeLock = null;
+  async function acquireWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch { wakeLock = null; }
+  }
+  function releaseWakeLock() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  // Le wake lock est perdu quand l'app passe en arrière-plan : on le
+  // re-demande au retour si une capture est toujours en cours.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isCapturing) acquireWakeLock();
+  });
+
   async function startCapture() {
     if (isCapturing) return;
     // Sur Safari/iOS, la prévisualisation peut s'afficher sans que la lecture
     // du flux ait réellement démarré (politique anti-autoplay) — on retente
     // ici, dans le geste utilisateur, ce qui lève ce blocage le cas échéant.
     if (viewfinder.paused) await viewfinder.play().catch(() => {});
+    acquireWakeLock();
     await Camera.lockAutoAdjustments();
     setCapturingUI(true);
     const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
@@ -251,6 +272,7 @@
   async function stopCapture() {
     if (!isCapturing) return;
     setCapturingUI(false);
+    releaseWakeLock();
     Camera.unlockAutoAdjustments();
 
     try {

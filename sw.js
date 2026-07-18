@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lightpainting-shell-v5';
+const CACHE_NAME = 'lightpainting-shell-v6';
 const APP_SHELL = [
   './',
   './index.html',
@@ -38,8 +38,14 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        // Ne cacher que les réponses valides de notre propre origine :
+        // évite de stocker des erreurs (404/500) ou des réponses opaques
+        // tierces qui seraient ensuite servies hors-ligne à tort.
+        const sameOrigin = new URL(event.request.url).origin === self.location.origin;
+        if (response.ok && sameOrigin) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       })
       .catch(() => caches.match(event.request))
