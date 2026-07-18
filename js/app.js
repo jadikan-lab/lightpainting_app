@@ -47,6 +47,7 @@
 
   const btnSettingsClose = document.getElementById('btn-settings-close');
   const toggleVideoRecording = document.getElementById('toggle-video-recording');
+  const segmentShootingMode = document.getElementById('segment-shooting-mode');
   const segmentPhotoFormat = document.getElementById('segment-photo-format');
   const segmentCountdown = document.getElementById('segment-countdown');
   const toggleGrid = document.getElementById('toggle-grid');
@@ -56,6 +57,16 @@
   const btnClearGallery = document.getElementById('btn-clear-gallery');
 
   const ALL_SCREENS = [screenCamera, screenGallery, screenViewer, screenReview, screenSettings];
+
+  // Modes façon Huawei : le masquage v2 ne coûtant plus rien pendant la
+  // capture (calculé une seule fois à l'arrêt), la sensibilité redevient un
+  // paramètre pertinent à décliner par type de sujet.
+  const SHOOTING_MODE_PARAMS = {
+    freeform: { motionMask: false, sensitivity: 'medium' },
+    graffiti: { motionMask: true, sensitivity: 'high' },
+    lighttrails: { motionMask: true, sensitivity: 'medium' },
+    startrails: { motionMask: false, sensitivity: 'medium' },
+  };
 
   let isCapturing = false;
   let recTimerInterval = null;
@@ -225,9 +236,12 @@
     await Camera.lockAutoAdjustments();
     setCapturingUI(true);
     const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
+    const modeParams = SHOOTING_MODE_PARAMS[Settings.get('shootingMode')] || SHOOTING_MODE_PARAMS.freeform;
     CaptureEngine.start({
       mirror,
       format: Settings.get('photoFormat'),
+      motionMask: modeParams.motionMask,
+      sensitivity: modeParams.sensitivity,
       onError: handleCaptureStartError,
     });
     if (Settings.get('videoRecordingEnabled')) Recorder.start(Camera.getStream());
@@ -382,6 +396,9 @@
   function applySettingsToUI() {
     const values = Settings.getAll();
     toggleVideoRecording.checked = values.videoRecordingEnabled;
+    for (const btn of segmentShootingMode.children) {
+      btn.classList.toggle('is-active', btn.dataset.value === values.shootingMode);
+    }
     for (const btn of segmentPhotoFormat.children) {
       btn.classList.toggle('is-active', btn.dataset.value === values.photoFormat);
     }
@@ -490,6 +507,18 @@
     Settings.set('videoRecordingEnabled', toggleVideoRecording.checked);
   });
 
+  segmentShootingMode.addEventListener('click', (e) => {
+    const btn = e.target.closest('.segmented-btn');
+    if (!btn) return;
+    Settings.set('shootingMode', btn.dataset.value);
+    // Les étoiles bougent trop peu pour se passer d'un trépied : on suggère
+    // un retardateur, sans écraser un choix déjà fait manuellement.
+    if (btn.dataset.value === 'startrails' && !Settings.get('countdownManuallySet')) {
+      Settings.set('countdownSeconds', 5);
+    }
+    applySettingsToUI();
+  });
+
   segmentPhotoFormat.addEventListener('click', (e) => {
     const btn = e.target.closest('.segmented-btn');
     if (!btn) return;
@@ -501,6 +530,7 @@
     const btn = e.target.closest('.segmented-btn');
     if (!btn) return;
     Settings.set('countdownSeconds', Number(btn.dataset.value));
+    Settings.set('countdownManuallySet', true);
     applySettingsToUI();
   });
 

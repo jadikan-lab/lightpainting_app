@@ -18,6 +18,9 @@ const Settings = (() => {
     videoRecordingEnabled: false,
     timelapseEnabled: true,
     countdownSeconds: 0, // 0 = désactivé
+    countdownManuallySet: false, // évite qu'une suggestion de mode n'écrase un choix déjà fait
+    // 'freeform' (libre, sans masque) | 'graffiti' | 'lighttrails' | 'startrails'
+    shootingMode: 'freeform',
   };
 
   function load() {

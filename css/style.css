@@ -559,9 +559,10 @@ body {
 
 .settings-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px 16px;
   padding: 14px 4px;
   border-bottom: 1px solid var(--line);
 }
