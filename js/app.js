@@ -66,7 +66,7 @@
   const SHOOTING_MODE_HINTS = {
     longexposure: 'Décor et trainée se mélangent, comme une vraie pose longue',
     olympus: 'Fond figé et net, seule la trainée s\'accumule par-dessus',
-    videotrace: 'Fond vidéo en direct, la trainée forte est isolée par-dessus',
+    videotrace: 'Fond vidéo en direct, tu restes visible en mouvement avec la trainée',
   };
 
   let isCapturing = false;
@@ -540,7 +540,10 @@
     shootingModeHint.textContent = SHOOTING_MODE_HINTS[values.shootingMode] || SHOOTING_MODE_HINTS.longexposure;
     toggleProMode.checked = values.proMode;
 
-    const maskingModeActive = values.shootingMode === 'olympus' || values.shootingMode === 'videotrace';
+    // Seul 'olympus' masque encore (isole la trainée sur fond figé) — la
+    // sensibilité n'a plus de sens pour 'videotrace', qui superpose tout
+    // l'accumulé sans seuil.
+    const maskingModeActive = values.shootingMode === 'olympus';
     sensitivitySlider.hidden = !(values.proMode && maskingModeActive);
     sensitivitySlider.value = values.maskSensitivityValue;
   }

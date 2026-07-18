@@ -9,9 +9,12 @@
 //   décor et trainée se mélangent comme une vraie pose longue argentique.
 // - 'olympus' (trainées nettes façon Olympus Live Composite) : le décor est
 //   figé sur une image de référence capturée au début, seule la trainée
-//   lumineuse forte s'accumule par-dessus.
+//   lumineuse forte s'accumule par-dessus (tout le reste, y compris le
+//   photographe en mouvement, est écarté par le masque).
 // - 'videotrace' (vidéo + trace) : le décor reste la vidéo courante (pas
-//   figée), la trainée forte est isolée par seuil et superposée dessus.
+//   figée), et TOUT ce qui a été accumulé (trainée ET mouvement du
+//   photographe) est superposé dessus sans masque — pensé pour qu'on se
+//   voie bouger en même temps que la trainée se forme.
 //
 // Le nettoyage (masque) ne coûte rien à chaque frame : la boucle live reste
 // une simple accumulation. Pour 'olympus'/'videotrace', un aperçu du rendu
@@ -167,11 +170,27 @@ const CaptureEngine = (() => {
     return result;
   }
 
+  // 'videotrace' : pas de masque — le fond frais reçoit l'accumulé complet
+  // (trainée + tout mouvement capté) via un simple blend "lighten", pour que
+  // le photographe reste visible en train de bouger, pas seulement la trainée.
+  function buildBlendedComposite(bgCanvas) {
+    const w = canvasEl.width;
+    const h = canvasEl.height;
+    const result = document.createElement('canvas');
+    result.width = w;
+    result.height = h;
+    const resultCtx = result.getContext('2d');
+    resultCtx.drawImage(bgCanvas, 0, 0);
+    resultCtx.globalCompositeOperation = 'lighten';
+    resultCtx.drawImage(canvasEl, 0, 0);
+    return result;
+  }
+
   function updateLivePreview() {
     if (!running || captureStyle === 'longexposure') return;
     const bg = captureStyle === 'olympus' ? backgroundCanvas : captureFreshFrame();
     if (!bg) return;
-    const composite = buildMaskedComposite(bg);
+    const composite = captureStyle === 'olympus' ? buildMaskedComposite(bg) : buildBlendedComposite(bg);
     previewCtx.clearRect(0, 0, previewCanvasEl.width, previewCanvasEl.height);
     previewCtx.drawImage(composite, 0, 0);
   }
@@ -238,7 +257,7 @@ const CaptureEngine = (() => {
     } else if (captureStyle === 'videotrace') {
       const freshBg = captureFreshFrame();
       if (freshBg) {
-        const composite = buildMaskedComposite(freshBg);
+        const composite = buildBlendedComposite(freshBg);
         ctx.globalCompositeOperation = 'source-over';
         ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
         ctx.drawImage(composite, 0, 0);
