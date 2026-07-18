@@ -139,9 +139,23 @@
     }
   }
 
+  function handleCaptureStartError() {
+    if (!isCapturing) return;
+    setCapturingUI(false);
+    if (Recorder.isRecording()) Recorder.stop();
+    Timelapse.stopCollecting();
+    cameraStatus.hidden = false;
+    cameraStatus.textContent = "La caméra n'a pas pu démarrer la capture. Réessaie.";
+    setTimeout(() => { cameraStatus.hidden = true; }, 4000);
+  }
+
   async function startCapture() {
     if (isCapturing) return;
     vibrate(15);
+    // Sur Safari/iOS, la prévisualisation peut s'afficher sans que la lecture
+    // du flux ait réellement démarré (politique anti-autoplay) — on retente
+    // ici, dans le geste utilisateur, ce qui lève ce blocage le cas échéant.
+    if (viewfinder.paused) await viewfinder.play().catch(() => {});
     setCapturingUI(true);
     const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
     CaptureEngine.start({
@@ -149,6 +163,7 @@
       format: Settings.get('photoFormat'),
       motionMask: Settings.get('motionMask'),
       sensitivity: Settings.get('motionSensitivity'),
+      onError: handleCaptureStartError,
     });
     if (Settings.get('videoRecordingEnabled')) Recorder.start(Camera.getStream());
     if (Settings.get('timelapseEnabled')) Timelapse.startCollecting(accumulator);

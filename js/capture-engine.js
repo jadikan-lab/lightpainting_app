@@ -5,6 +5,7 @@
 // capturé au démarrage (fond stable, trainée nette — voir js/motion-mask.js).
 const CaptureEngine = (() => {
   const BACKGROUND_SETTLE_MS = 300;
+  const RESIZE_TIMEOUT_MS = 4000;
 
   let videoEl = null;
   let canvasEl = null;
@@ -74,7 +75,7 @@ const CaptureEngine = (() => {
     withMirror(() => ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height));
   }
 
-  function start({ mirror: mirrorFlip = false, format = 'jpeg', motionMask = false, sensitivity = 'medium' } = {}) {
+  function start({ mirror: mirrorFlip = false, format = 'jpeg', motionMask = false, sensitivity = 'medium', onError } = {}) {
     if (running || starting) return;
     starting = true;
     mirror = mirrorFlip;
@@ -88,8 +89,16 @@ const CaptureEngine = (() => {
       rafId = requestAnimationFrame(useMotionMask ? drawFrameMasked : drawFrame);
     };
 
+    const deadline = performance.now() + RESIZE_TIMEOUT_MS;
+
     const tryStart = () => {
+      if (!starting) return; // stop() a annulé pendant l'attente
       if (!resizeToVideoResolution()) {
+        if (performance.now() > deadline) {
+          starting = false;
+          if (onError) onError(new Error('camera-video-not-ready'));
+          return;
+        }
         requestAnimationFrame(tryStart);
         return;
       }
@@ -113,14 +122,13 @@ const CaptureEngine = (() => {
   }
 
   function stop() {
-    if (starting && settleTimeoutId) {
+    if (settleTimeoutId) {
       clearTimeout(settleTimeoutId);
       settleTimeoutId = null;
-      starting = false;
     }
+    starting = false;
     if (!running) return Promise.resolve(null);
     running = false;
-    starting = false;
     cancelAnimationFrame(rafId);
     return new Promise((resolve) => {
       canvasEl.toBlob((blob) => resolve(blob), outputFormat, 1.0);
