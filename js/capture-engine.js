@@ -4,13 +4,24 @@
 // à mix-blend-mode:lighten en CSS (voir style.css), la vidéo live reste
 // visible en direct sous la trainée qui s'accumule dessus (voir index.html).
 //
-// Masque de mouvement (optionnel) : contrairement à une v1 qui diffait chaque
-// frame en temps réel (coûteux, causait des saccades), le nettoyage du fond
-// ne se fait qu'UNE FOIS à l'arrêt de la capture — la boucle live n'a donc
-// aucun coût supplémentaire, quel que soit le mode.
+// Trois styles de capture :
+// - 'longexposure' (pose longue) : accumulation brute, aucun traitement,
+//   décor et trainée se mélangent comme une vraie pose longue argentique.
+// - 'olympus' (trainées nettes façon Olympus Live Composite) : le décor est
+//   figé sur une image de référence capturée au début, seule la trainée
+//   lumineuse forte s'accumule par-dessus.
+// - 'videotrace' (vidéo + trace) : le décor reste la vidéo courante (pas
+//   figée), la trainée forte est isolée par seuil et superposée dessus.
+//
+// Le nettoyage (masque) ne coûte rien à chaque frame : la boucle live reste
+// une simple accumulation. Pour 'olympus'/'videotrace', un aperçu du rendu
+// nettoyé est recalculé périodiquement (2-3x/seconde, pas à chaque frame)
+// sur un canvas de preview séparé — assez pour voir l'effet en direct sans
+// jamais saccader la vidéo elle-même.
 const CaptureEngine = (() => {
   const RESIZE_TIMEOUT_MS = 4000;
   const BACKGROUND_SETTLE_MS = 300;
+  const PREVIEW_INTERVAL_MS = 400;
   const MASK_WORK_WIDTH = 192;
   const MASK_NOISE_FLOOR = 10;
   const MASK_SENSITIVITY_GAIN = { low: 2.2, medium: 3.5, high: 5.5 };
@@ -18,21 +29,26 @@ const CaptureEngine = (() => {
   let videoEl = null;
   let canvasEl = null;
   let ctx = null;
+  let previewCanvasEl = null;
+  let previewCtx = null;
   let rafId = null;
   let running = false;
   let starting = false;
   let mirror = false;
   let outputFormat = 'image/jpeg';
   let frameCount = 0;
-  let useMotionMask = false;
+  let captureStyle = 'longexposure';
   let maskSensitivity = 'medium';
   let backgroundCanvas = null;
   let bgSettleTimeoutId = null;
+  let previewIntervalId = null;
 
-  function init(video, canvas) {
+  function init(video, canvas, previewCanvas) {
     videoEl = video;
     canvasEl = canvas;
     ctx = canvasEl.getContext('2d');
+    previewCanvasEl = previewCanvas;
+    previewCtx = previewCanvasEl.getContext('2d');
   }
 
   function resizeToVideoResolution() {
@@ -41,6 +57,8 @@ const CaptureEngine = (() => {
     if (!w || !h) return false;
     canvasEl.width = w;
     canvasEl.height = h;
+    previewCanvasEl.width = w;
+    previewCanvasEl.height = h;
     return true;
   }
 
@@ -61,80 +79,48 @@ const CaptureEngine = (() => {
     rafId = requestAnimationFrame(drawFrame);
   }
 
-  function captureBackgroundReference() {
-    if (!running) return; // capture déjà arrêtée entre-temps
-    const bg = document.createElement('canvas');
-    bg.width = canvasEl.width;
-    bg.height = canvasEl.height;
-    const bgCtx = bg.getContext('2d');
-    // Même orientation que le canvas d'accumulation (qui applique withMirror
-    // à chaque frame), pour que fond et trainée se superposent correctement.
-    bgCtx.save();
+  // Capture ponctuelle de la frame vidéo courante, en pleine résolution et
+  // dans la même orientation que l'accumulateur (miroir appliqué le cas
+  // échéant). Réutilisé pour le fond de référence "olympus" (une fois, au
+  // début) et pour le fond "live" de "videotrace" (à chaque preview + à
+  // l'arrêt).
+  function captureFreshFrame() {
+    const w = canvasEl.width;
+    const h = canvasEl.height;
+    if (!w || !h) return null;
+    const snap = document.createElement('canvas');
+    snap.width = w;
+    snap.height = h;
+    const snapCtx = snap.getContext('2d');
+    snapCtx.save();
     if (mirror) {
-      bgCtx.translate(bg.width, 0);
-      bgCtx.scale(-1, 1);
+      snapCtx.translate(w, 0);
+      snapCtx.scale(-1, 1);
     }
-    bgCtx.drawImage(videoEl, 0, 0, bg.width, bg.height);
-    bgCtx.restore();
-    backgroundCanvas = bg;
+    snapCtx.drawImage(videoEl, 0, 0, w, h);
+    snapCtx.restore();
+    return snap;
   }
 
-  function start({ mirror: mirrorFlip = false, format = 'jpeg', motionMask = false, sensitivity = 'medium', onError } = {}) {
-    if (running || starting) return;
-    starting = true;
-    mirror = mirrorFlip;
-    outputFormat = format === 'png' ? 'image/png' : 'image/jpeg';
-    frameCount = 0;
-    useMotionMask = motionMask;
-    maskSensitivity = sensitivity;
-    backgroundCanvas = null;
-
-    const deadline = performance.now() + RESIZE_TIMEOUT_MS;
-
-    const tryStart = () => {
-      if (!starting) return; // stop() a annulé pendant l'attente
-      if (!resizeToVideoResolution()) {
-        if (performance.now() > deadline) {
-          starting = false;
-          if (onError) onError(new Error('camera-video-not-ready'));
-          return;
-        }
-        requestAnimationFrame(tryStart);
-        return;
-      }
-      running = true;
-      starting = false;
-      rafId = requestAnimationFrame(drawFrame);
-
-      if (useMotionMask) {
-        bgSettleTimeoutId = setTimeout(() => {
-          bgSettleTimeoutId = null;
-          captureBackgroundReference();
-        }, BACKGROUND_SETTLE_MS);
-      }
-    };
-    tryStart();
-  }
-
-  // Nettoyage du fond, calculé une seule fois : diff basse résolution entre
-  // l'accumulé courant et le fond de référence, agrandi puis utilisé pour ne
-  // garder que les zones de vraie trainée par-dessus un fond net et stable.
-  function applyMotionMaskCleanup() {
+  // Calcule un masque de différence basse résolution entre l'accumulé
+  // courant et un fond donné, puis compose fond + trainée isolée dans un
+  // nouveau canvas (ne modifie ni l'accumulateur ni rien d'autre — appelé
+  // aussi bien pour la preview périodique que pour l'export final).
+  function buildMaskedComposite(bgCanvas) {
     const w = canvasEl.width;
     const h = canvasEl.height;
     const smallW = MASK_WORK_WIDTH;
     const smallH = Math.max(1, Math.round(smallW * (h / w)));
 
-    const smallAccum = document.createElement('canvas');
-    smallAccum.width = smallW;
-    smallAccum.height = smallH;
-    const smallAccumCtx = smallAccum.getContext('2d', { willReadFrequently: true });
+    const smallAccumCtx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    smallAccumCtx.canvas.width = smallW;
+    smallAccumCtx.canvas.height = smallH;
     smallAccumCtx.drawImage(canvasEl, 0, 0, smallW, smallH);
 
     const smallBgCtx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
     smallBgCtx.canvas.width = smallW;
     smallBgCtx.canvas.height = smallH;
-    smallBgCtx.drawImage(backgroundCanvas, 0, 0, smallW, smallH);
+    smallBgCtx.drawImage(bgCanvas, 0, 0, smallW, smallH);
 
     const accumData = smallAccumCtx.getImageData(0, 0, smallW, smallH);
     const bgData = smallBgCtx.getImageData(0, 0, smallW, smallH);
@@ -166,12 +152,64 @@ const CaptureEngine = (() => {
     const trailCtx = trailLayer.getContext('2d');
     trailCtx.drawImage(canvasEl, 0, 0);
     trailCtx.globalCompositeOperation = 'destination-in';
-    trailCtx.drawImage(smallAccum, 0, 0, w, h);
+    trailCtx.drawImage(smallAccumCtx.canvas, 0, 0, w, h);
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(backgroundCanvas, 0, 0);
-    ctx.drawImage(trailLayer, 0, 0);
+    const result = document.createElement('canvas');
+    result.width = w;
+    result.height = h;
+    const resultCtx = result.getContext('2d');
+    resultCtx.drawImage(bgCanvas, 0, 0);
+    resultCtx.drawImage(trailLayer, 0, 0);
+    return result;
+  }
+
+  function updateLivePreview() {
+    if (!running || captureStyle === 'longexposure') return;
+    const bg = captureStyle === 'olympus' ? backgroundCanvas : captureFreshFrame();
+    if (!bg) return;
+    const composite = buildMaskedComposite(bg);
+    previewCtx.clearRect(0, 0, previewCanvasEl.width, previewCanvasEl.height);
+    previewCtx.drawImage(composite, 0, 0);
+  }
+
+  function start({ mirror: mirrorFlip = false, format = 'jpeg', captureStyle: style = 'longexposure', sensitivity = 'medium', onError } = {}) {
+    if (running || starting) return;
+    starting = true;
+    mirror = mirrorFlip;
+    outputFormat = format === 'png' ? 'image/png' : 'image/jpeg';
+    frameCount = 0;
+    captureStyle = style;
+    maskSensitivity = sensitivity;
+    backgroundCanvas = null;
+
+    const deadline = performance.now() + RESIZE_TIMEOUT_MS;
+
+    const tryStart = () => {
+      if (!starting) return; // stop() a annulé pendant l'attente
+      if (!resizeToVideoResolution()) {
+        if (performance.now() > deadline) {
+          starting = false;
+          if (onError) onError(new Error('camera-video-not-ready'));
+          return;
+        }
+        requestAnimationFrame(tryStart);
+        return;
+      }
+      running = true;
+      starting = false;
+      rafId = requestAnimationFrame(drawFrame);
+
+      if (captureStyle === 'olympus') {
+        bgSettleTimeoutId = setTimeout(() => {
+          bgSettleTimeoutId = null;
+          backgroundCanvas = captureFreshFrame();
+        }, BACKGROUND_SETTLE_MS);
+      }
+      if (captureStyle !== 'longexposure') {
+        previewIntervalId = setInterval(updateLivePreview, PREVIEW_INTERVAL_MS);
+      }
+    };
+    tryStart();
   }
 
   function stop() {
@@ -179,13 +217,28 @@ const CaptureEngine = (() => {
       clearTimeout(bgSettleTimeoutId);
       bgSettleTimeoutId = null;
     }
+    if (previewIntervalId) {
+      clearInterval(previewIntervalId);
+      previewIntervalId = null;
+    }
     starting = false;
     if (!running) return Promise.resolve(null);
     running = false;
     cancelAnimationFrame(rafId);
 
-    if (useMotionMask && backgroundCanvas) {
-      applyMotionMaskCleanup();
+    if (captureStyle === 'olympus' && backgroundCanvas) {
+      const composite = buildMaskedComposite(backgroundCanvas);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+      ctx.drawImage(composite, 0, 0);
+    } else if (captureStyle === 'videotrace') {
+      const freshBg = captureFreshFrame();
+      if (freshBg) {
+        const composite = buildMaskedComposite(freshBg);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+        ctx.drawImage(composite, 0, 0);
+      }
     }
 
     // Fond noir derrière ce qui resterait transparent (aucune lumière vue à
@@ -198,12 +251,13 @@ const CaptureEngine = (() => {
 
     // toBlob() capture une copie du bitmap de façon synchrone au moment de
     // l'appel (l'encodage async qui suit ne voit plus les changements
-    // ultérieurs) : on peut donc vider le canvas juste après sans risque,
+    // ultérieurs) : on peut donc vider les canvas juste après sans risque,
     // pour que l'écran caméra reparte sur une vidéo live propre.
     const blobPromise = new Promise((resolve) => {
       canvasEl.toBlob((blob) => resolve(blob), outputFormat, 1.0);
     });
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    previewCtx.clearRect(0, 0, previewCanvasEl.width, previewCanvasEl.height);
     return blobPromise;
   }
 
