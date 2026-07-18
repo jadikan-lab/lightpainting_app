@@ -8,8 +8,12 @@
   const recTimer = document.getElementById('rec-timer');
   const recFrameCount = document.getElementById('rec-frame-count');
   const gridOverlay = document.getElementById('grid-overlay');
+  const countdownOverlay = document.getElementById('countdown-overlay');
+  const countdownNumber = document.getElementById('countdown-number');
+  const zoomSlider = document.getElementById('zoom-slider');
 
   const btnSwitchCamera = document.getElementById('btn-switch-camera');
+  const btnTorch = document.getElementById('btn-torch');
   const btnShutter = document.getElementById('btn-shutter');
   const btnGallery = document.getElementById('btn-gallery');
   const thumbLatest = document.getElementById('thumb-latest');
@@ -18,6 +22,7 @@
   const screenCamera = document.getElementById('screen-camera');
   const screenGallery = document.getElementById('screen-gallery');
   const screenViewer = document.getElementById('screen-viewer');
+  const screenReview = document.getElementById('screen-review');
   const screenSettings = document.getElementById('screen-settings');
   const btnGalleryClose = document.getElementById('btn-gallery-close');
   const galleryGrid = document.getElementById('gallery-grid');
@@ -27,6 +32,7 @@
   const selectionCount = document.getElementById('selection-count');
   const btnSelectionCancel = document.getElementById('btn-selection-cancel');
   const btnSelectionAll = document.getElementById('btn-selection-all');
+  const btnSelectionExport = document.getElementById('btn-selection-export');
   const btnSelectionDelete = document.getElementById('btn-selection-delete');
 
   const btnViewerClose = document.getElementById('btn-viewer-close');
@@ -34,9 +40,15 @@
   const btnViewerExport = document.getElementById('btn-viewer-export');
   const viewerMedia = document.getElementById('viewer-media');
 
+  const reviewMedia = document.getElementById('review-media');
+  const reviewBadges = document.getElementById('review-badges');
+  const btnReviewDiscard = document.getElementById('btn-review-discard');
+  const btnReviewKeep = document.getElementById('btn-review-keep');
+
   const btnSettingsClose = document.getElementById('btn-settings-close');
   const toggleVideoRecording = document.getElementById('toggle-video-recording');
   const segmentPhotoFormat = document.getElementById('segment-photo-format');
+  const segmentCountdown = document.getElementById('segment-countdown');
   const toggleGrid = document.getElementById('toggle-grid');
   const toggleMirror = document.getElementById('toggle-mirror');
   const toggleHaptics = document.getElementById('toggle-haptics');
@@ -46,7 +58,7 @@
   const storageSummary = document.getElementById('storage-summary');
   const btnClearGallery = document.getElementById('btn-clear-gallery');
 
-  const ALL_SCREENS = [screenCamera, screenGallery, screenViewer, screenSettings];
+  const ALL_SCREENS = [screenCamera, screenGallery, screenViewer, screenReview, screenSettings];
 
   let isCapturing = false;
   let recTimerInterval = null;
@@ -55,6 +67,12 @@
   let currentViewerUrl = null;
   let selectionMode = false;
   let selectedIds = new Set();
+  let torchOn = false;
+  let countdownActive = false;
+  let countdownIntervalId = null;
+  let pendingPhoto = null; // { blob, url }
+  let pendingVideoResult = null;
+  let pendingTimelapseResult = null;
 
   function showScreen(name) {
     for (const el of ALL_SCREENS) {
@@ -94,6 +112,26 @@
     accumulator.classList.toggle('mirror-preview', shouldMirrorCanvasCss);
   }
 
+  function updateTorchUI() {
+    torchOn = false;
+    btnTorch.classList.remove('is-active');
+    btnTorch.hidden = !Camera.hasTorch();
+  }
+
+  function updateZoomUI() {
+    const zoomCaps = Camera.getZoomCapabilities();
+    if (zoomCaps && zoomCaps.max > zoomCaps.min) {
+      zoomSlider.min = zoomCaps.min;
+      zoomSlider.max = zoomCaps.max;
+      zoomSlider.step = zoomCaps.step || 0.1;
+      const settings = Camera.getSettings();
+      zoomSlider.value = (settings && settings.zoom) || zoomCaps.min;
+      zoomSlider.hidden = false;
+    } else {
+      zoomSlider.hidden = true;
+    }
+  }
+
   async function initCamera() {
     cameraStatus.hidden = false;
     cameraStatus.textContent = 'Chargement de la caméra…';
@@ -102,6 +140,8 @@
       cameraStatus.hidden = true;
       updateResBadge();
       updateMirrorPreview();
+      updateTorchUI();
+      updateZoomUI();
       CaptureEngine.init(viewfinder, accumulator);
     } catch (err) {
       cameraStatus.hidden = false;
@@ -146,11 +186,44 @@
   function handleCaptureStartError() {
     if (!isCapturing) return;
     setCapturingUI(false);
+    Camera.unlockAutoAdjustments();
     if (Recorder.isRecording()) Recorder.stop();
     Timelapse.stopCollecting();
     cameraStatus.hidden = false;
     cameraStatus.textContent = "La caméra n'a pas pu démarrer la capture. Réessaie.";
     setTimeout(() => { cameraStatus.hidden = true; }, 4000);
+  }
+
+  function cancelCountdown() {
+    clearInterval(countdownIntervalId);
+    countdownIntervalId = null;
+    countdownActive = false;
+    countdownOverlay.hidden = true;
+  }
+
+  function startCountdown(seconds) {
+    countdownActive = true;
+    let remaining = seconds;
+    countdownNumber.textContent = String(remaining);
+    countdownOverlay.hidden = false;
+    vibrate(15);
+    countdownIntervalId = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        cancelCountdown();
+        startCapture();
+        return;
+      }
+      countdownNumber.textContent = String(remaining);
+      vibrate(10);
+    }, 1000);
+  }
+
+  function requestCapture() {
+    if (isCapturing || countdownActive) return;
+    const seconds = Number(Settings.get('countdownSeconds')) || 0;
+    if (seconds > 0) startCountdown(seconds);
+    else startCapture();
   }
 
   async function startCapture() {
@@ -160,6 +233,7 @@
     // du flux ait réellement démarré (politique anti-autoplay) — on retente
     // ici, dans le geste utilisateur, ce qui lève ce blocage le cas échéant.
     if (viewfinder.paused) await viewfinder.play().catch(() => {});
+    await Camera.lockAutoAdjustments();
     setCapturingUI(true);
     const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
     CaptureEngine.start({
@@ -177,12 +251,19 @@
     if (!isCapturing) return;
     vibrate([12, 40, 12]);
     setCapturingUI(false);
+    Camera.unlockAutoAdjustments();
 
     try {
       await finishCapture();
     } catch (err) {
       console.error('stopCapture failed', err);
     }
+  }
+
+  function makeBadge(text) {
+    const span = document.createElement('span');
+    span.textContent = text;
+    return span;
   }
 
   async function finishCapture() {
@@ -194,29 +275,62 @@
       timelapseFrames ? Timelapse.build(timelapseFrames) : Promise.resolve(null),
     ]);
 
-    if (photoBlob) {
-      const thumb = await Gallery.createPhotoThumbnail(photoBlob);
-      await MediaDB.addMedia({ type: 'photo', blob: photoBlob, thumbnail: thumb, mimeType: photoBlob.type });
-    }
-    if (videoResult && videoResult.blob) {
-      const thumb = await Gallery.createVideoThumbnail(videoResult.blob).catch(() => null);
+    if (!photoBlob) return; // rien à relire (capture jamais réellement démarrée)
+
+    pendingVideoResult = videoResult && videoResult.blob ? videoResult : null;
+    pendingTimelapseResult = timelapseResult && timelapseResult.blob ? timelapseResult : null;
+
+    const url = URL.createObjectURL(photoBlob);
+    pendingPhoto = { blob: photoBlob, url };
+
+    reviewMedia.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = '';
+    reviewMedia.appendChild(img);
+
+    reviewBadges.innerHTML = '';
+    if (pendingVideoResult) reviewBadges.appendChild(makeBadge('+ Vidéo'));
+    if (pendingTimelapseResult) reviewBadges.appendChild(makeBadge('+ Timelapse'));
+
+    showScreen('review');
+  }
+
+  function discardPending() {
+    if (pendingPhoto) URL.revokeObjectURL(pendingPhoto.url);
+    pendingPhoto = null;
+    pendingVideoResult = null;
+    pendingTimelapseResult = null;
+    reviewMedia.innerHTML = '';
+    reviewBadges.innerHTML = '';
+  }
+
+  async function keepCapture() {
+    if (!pendingPhoto) return;
+    const thumb = await Gallery.createPhotoThumbnail(pendingPhoto.blob);
+    await MediaDB.addMedia({ type: 'photo', blob: pendingPhoto.blob, thumbnail: thumb, mimeType: pendingPhoto.blob.type });
+
+    if (pendingVideoResult) {
+      const vThumb = await Gallery.createVideoThumbnail(pendingVideoResult.blob).catch(() => null);
       await MediaDB.addMedia({
         type: 'video',
-        blob: videoResult.blob,
-        thumbnail: thumb,
-        mimeType: videoResult.mimeType,
+        blob: pendingVideoResult.blob,
+        thumbnail: vThumb,
+        mimeType: pendingVideoResult.mimeType,
       });
     }
-    if (timelapseResult && timelapseResult.blob) {
-      const thumb = await Gallery.createVideoThumbnail(timelapseResult.blob).catch(() => null);
+    if (pendingTimelapseResult) {
+      const tThumb = await Gallery.createVideoThumbnail(pendingTimelapseResult.blob).catch(() => null);
       await MediaDB.addMedia({
         type: 'timelapse',
-        blob: timelapseResult.blob,
-        thumbnail: thumb,
-        mimeType: timelapseResult.mimeType,
+        blob: pendingTimelapseResult.blob,
+        thumbnail: tThumb,
+        mimeType: pendingTimelapseResult.mimeType,
       });
     }
+    discardPending();
     await refreshLatestThumb();
+    showScreen('camera');
   }
 
   function updateSelectionUI() {
@@ -224,6 +338,7 @@
     gallerySelectionBar.hidden = !selectionMode;
     selectionCount.textContent = `${selectedIds.size} sélectionné${selectedIds.size > 1 ? 's' : ''}`;
     btnSelectionDelete.disabled = selectedIds.size === 0;
+    btnSelectionExport.disabled = selectedIds.size === 0;
     Gallery.setSelectionState(galleryGrid, selectedIds);
   }
 
@@ -285,6 +400,9 @@
     for (const btn of segmentPhotoFormat.children) {
       btn.classList.toggle('is-active', btn.dataset.value === values.photoFormat);
     }
+    for (const btn of segmentCountdown.children) {
+      btn.classList.toggle('is-active', Number(btn.dataset.value) === values.countdownSeconds);
+    }
     toggleGrid.checked = values.gridOverlay;
     toggleMirror.checked = values.mirrorFrontFinal;
     toggleHaptics.checked = values.haptics;
@@ -301,11 +419,29 @@
     await Camera.switchCamera();
     updateResBadge();
     updateMirrorPreview();
+    updateTorchUI();
+    updateZoomUI();
+  });
+
+  btnTorch.addEventListener('click', async () => {
+    const next = !torchOn;
+    const ok = await Camera.setTorch(next);
+    torchOn = ok ? next : false;
+    btnTorch.classList.toggle('is-active', torchOn);
+  });
+
+  zoomSlider.addEventListener('input', () => {
+    Camera.setZoom(Number(zoomSlider.value));
   });
 
   btnShutter.addEventListener('click', () => {
-    if (isCapturing) stopCapture();
-    else startCapture();
+    if (countdownActive) {
+      cancelCountdown();
+    } else if (isCapturing) {
+      stopCapture();
+    } else {
+      requestCapture();
+    }
   });
 
   btnGallery.addEventListener('click', () => {
@@ -324,6 +460,12 @@
   btnSelectionAll.addEventListener('click', () => {
     selectedIds = new Set([...galleryGrid.children].map((cell) => Number(cell.dataset.id)));
     updateSelectionUI();
+  });
+
+  btnSelectionExport.addEventListener('click', async () => {
+    if (selectedIds.size === 0) return;
+    const items = await Promise.all([...selectedIds].map((id) => MediaDB.getMedia(id)));
+    await Gallery.exportMultiple(items.filter(Boolean));
   });
 
   btnSelectionDelete.addEventListener('click', async () => {
@@ -350,6 +492,13 @@
     if (currentViewerMedia) Gallery.exportMedia(currentViewerMedia);
   });
 
+  btnReviewDiscard.addEventListener('click', () => {
+    discardPending();
+    showScreen('camera');
+  });
+
+  btnReviewKeep.addEventListener('click', keepCapture);
+
   btnSettings.addEventListener('click', () => {
     applySettingsToUI();
     refreshStorageSummary();
@@ -366,6 +515,13 @@
     const btn = e.target.closest('.segmented-btn');
     if (!btn) return;
     Settings.set('photoFormat', btn.dataset.value);
+    applySettingsToUI();
+  });
+
+  segmentCountdown.addEventListener('click', (e) => {
+    const btn = e.target.closest('.segmented-btn');
+    if (!btn) return;
+    Settings.set('countdownSeconds', Number(btn.dataset.value));
     applySettingsToUI();
   });
 

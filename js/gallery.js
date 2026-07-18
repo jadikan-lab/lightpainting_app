@@ -133,12 +133,27 @@ const Gallery = (() => {
     return url;
   }
 
-  async function exportMedia(media) {
+  function mediaToFile(media) {
     const ext = media.type === 'photo'
       ? (media.mimeType && media.mimeType.includes('png') ? 'png' : 'jpg')
       : (media.mimeType && media.mimeType.includes('mp4') ? 'mp4' : 'webm');
     const filename = `lightpainting-${media.createdAt}.${ext}`;
-    const file = new File([media.blob], filename, { type: media.blob.type || media.mimeType });
+    return new File([media.blob], filename, { type: media.blob.type || media.mimeType });
+  }
+
+  function downloadFile(file) {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  async function exportMedia(media) {
+    const file = mediaToFile(media);
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -150,15 +165,38 @@ const Gallery = (() => {
       }
     }
 
-    const url = URL.createObjectURL(media.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    downloadFile(file);
   }
 
-  return { createPhotoThumbnail, createVideoThumbnail, renderGrid, setSelectionState, renderViewer, exportMedia };
+  async function exportMultiple(mediaList) {
+    if (!mediaList || mediaList.length === 0) return;
+    const files = mediaList.map(mediaToFile);
+
+    // Une seule feuille de partage pour tous les fichiers quand le navigateur
+    // le permet, sinon repli en téléchargements séquentiels (léger délai
+    // entre chaque pour éviter le blocage de popups multiples).
+    if (navigator.canShare && navigator.canShare({ files })) {
+      try {
+        await navigator.share({ files });
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+
+    for (const file of files) {
+      downloadFile(file);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+
+  return {
+    createPhotoThumbnail,
+    createVideoThumbnail,
+    renderGrid,
+    setSelectionState,
+    renderViewer,
+    exportMedia,
+    exportMultiple,
+  };
 })();

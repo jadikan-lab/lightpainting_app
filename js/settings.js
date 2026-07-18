@@ -19,6 +19,7 @@ const Settings = (() => {
     // nettes, activable pour les appareils qui encaissent les deux à la fois.
     videoRecordingEnabled: false,
     timelapseEnabled: true,
+    countdownSeconds: 0, // 0 = désactivé
   };
 
   function load() {

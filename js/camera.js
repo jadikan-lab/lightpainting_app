@@ -1,4 +1,6 @@
-// Gère le flux caméra : ouverture, bascule avant/arrière, résolution native max.
+// Gère le flux caméra : ouverture, bascule avant/arrière, résolution native max,
+// et les réglages avancés quand le navigateur/l'appareil les expose (torche,
+// zoom, verrouillage focus/exposition) — tous avec repli silencieux si absents.
 const Camera = (() => {
   let videoEl = null;
   let stream = null;
@@ -68,5 +70,75 @@ const Camera = (() => {
     return facingMode;
   }
 
-  return { init, switchCamera, getStream, getVideoTrack, getSettings, getFacingMode };
+  function getCapabilities() {
+    const track = getVideoTrack();
+    return track && track.getCapabilities ? track.getCapabilities() : {};
+  }
+
+  async function applyAdvanced(constraint) {
+    const track = getVideoTrack();
+    if (!track) return false;
+    try {
+      await track.applyConstraints({ advanced: [constraint] });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Fige la mise au point et l'exposition sur leurs valeurs déjà convergées,
+  // pour éviter qu'une pose longue ne varie en luminosité/netteté en cours
+  // de route. Repli silencieux si le navigateur/l'appareil ne l'expose pas.
+  async function lockAutoAdjustments() {
+    const caps = getCapabilities();
+    if (caps.focusMode && caps.focusMode.includes('manual')) {
+      await applyAdvanced({ focusMode: 'manual' });
+    }
+    if (caps.exposureMode && caps.exposureMode.includes('manual')) {
+      await applyAdvanced({ exposureMode: 'manual' });
+    }
+  }
+
+  async function unlockAutoAdjustments() {
+    const caps = getCapabilities();
+    if (caps.focusMode && caps.focusMode.includes('continuous')) {
+      await applyAdvanced({ focusMode: 'continuous' });
+    }
+    if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
+      await applyAdvanced({ exposureMode: 'continuous' });
+    }
+  }
+
+  function hasTorch() {
+    return !!getCapabilities().torch;
+  }
+
+  function setTorch(on) {
+    return applyAdvanced({ torch: !!on });
+  }
+
+  function getZoomCapabilities() {
+    const caps = getCapabilities();
+    return caps.zoom ? caps.zoom : null;
+  }
+
+  function setZoom(value) {
+    return applyAdvanced({ zoom: value });
+  }
+
+  return {
+    init,
+    switchCamera,
+    getStream,
+    getVideoTrack,
+    getSettings,
+    getFacingMode,
+    getCapabilities,
+    lockAutoAdjustments,
+    unlockAutoAdjustments,
+    hasTorch,
+    setTorch,
+    getZoomCapabilities,
+    setZoom,
+  };
 })();

@@ -29,15 +29,26 @@
           <span id="rec-frame-count" class="rec-frame-count">· 0 frame</span>
         </div>
         <p id="camera-status" class="camera-status" hidden></p>
+        <div id="countdown-overlay" class="countdown-overlay" hidden>
+          <span id="countdown-number">3</span>
+        </div>
+        <input id="zoom-slider" class="zoom-slider" type="range" min="1" max="1" step="0.1" value="1" hidden aria-label="Zoom" />
       </div>
 
       <div class="hud-top safe-top">
-        <button id="btn-switch-camera" class="icon-btn" type="button" aria-label="Changer de caméra">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M17 2l3 3-3 3M20 5H8a5 5 0 0 0-5 5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M7 22l-3-3 3-3M4 19h12a5 5 0 0 0 5-5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+        <div class="hud-top-left">
+          <button id="btn-switch-camera" class="icon-btn" type="button" aria-label="Changer de caméra">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M17 2l3 3-3 3M20 5H8a5 5 0 0 0-5 5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M7 22l-3-3 3-3M4 19h12a5 5 0 0 0 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button id="btn-torch" class="icon-btn" type="button" aria-label="Torche" hidden>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M9 18h6M10 21h4M8 10a4 4 0 1 1 8 0c0 2-1.5 3-2 4.5-.2.6-.3 1-.3 1.5h-3.4c0-.5-.1-.9-.3-1.5C9.5 13 8 12 8 10Z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
         <div class="hud-top-right">
           <span id="res-badge" class="res-badge"></span>
           <button id="btn-settings" class="icon-btn" type="button" aria-label="Paramètres">
@@ -86,6 +97,11 @@
         <span id="selection-count" class="selection-count">0 sélectionné</span>
         <div class="selection-actions">
           <button id="btn-selection-all" class="text-btn" type="button">Tout</button>
+          <button id="btn-selection-export" class="icon-btn" type="button" aria-label="Exporter la sélection">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 15V4M8 8l4-4 4 4M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <button id="btn-selection-delete" class="icon-btn icon-btn-danger" type="button" aria-label="Supprimer la sélection">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/>
@@ -118,6 +134,16 @@
       </div>
     </section>
 
+    <!-- Relecture après capture -->
+    <section id="screen-review" class="screen" data-screen="review" hidden>
+      <div class="viewer-media safe-top" id="review-media"></div>
+      <div id="review-badges" class="review-badges"></div>
+      <div class="review-actions safe-bottom">
+        <button id="btn-review-discard" class="pill-btn pill-btn-outline" type="button">Refaire</button>
+        <button id="btn-review-keep" class="pill-btn" type="button">Garder</button>
+      </div>
+    </section>
+
     <!-- Paramètres -->
     <section id="screen-settings" class="screen" data-screen="settings" hidden>
       <header class="screen-header safe-top">
@@ -133,6 +159,19 @@
       <div class="settings-list safe-bottom">
         <div class="settings-section">
           <h2 class="settings-section-title">Capture</h2>
+
+          <div class="settings-row">
+            <span class="settings-row-label">
+              Retardateur
+              <span class="settings-row-hint">Le temps de te mettre en position</span>
+            </span>
+            <div id="segment-countdown" class="segmented" role="group" aria-label="Retardateur">
+              <button type="button" class="segmented-btn" data-value="0">Off</button>
+              <button type="button" class="segmented-btn" data-value="3">3s</button>
+              <button type="button" class="segmented-btn" data-value="5">5s</button>
+              <button type="button" class="segmented-btn" data-value="10">10s</button>
+            </div>
+          </div>
 
           <label class="settings-row">
             <span class="settings-row-label">
