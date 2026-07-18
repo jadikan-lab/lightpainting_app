@@ -1,11 +1,17 @@
 // Préférences utilisateur, persistées en localStorage.
 const Settings = (() => {
   const KEY = 'lightpainting-settings';
-  // v3 : suppression des vibrations (jugées inutiles) et du masque de
-  // mouvement (resté noir/saccadé en conditions réelles, remplacé par la
-  // vue combinée vidéo+trainées) — clés obsolètes purgées au chargement.
-  const SETTINGS_VERSION = 3;
+  // v4 : les modes façon Huawei (graffiti/phares/étoiles, sensibilité fixe)
+  // sont remplacés par 3 styles de capture plus clairs, avec preview live du
+  // rendu nettoyé — anciennes valeurs remappées au chargement.
+  const SETTINGS_VERSION = 4;
   const OBSOLETE_KEYS = ['haptics', 'motionMask', 'motionSensitivity'];
+  const SHOOTING_MODE_MIGRATION = {
+    freeform: 'longexposure',
+    graffiti: 'olympus',
+    lighttrails: 'olympus',
+    startrails: 'longexposure',
+  };
 
   const DEFAULTS = {
     photoFormat: 'jpeg', // 'jpeg' | 'png'
@@ -19,8 +25,9 @@ const Settings = (() => {
     timelapseEnabled: true,
     countdownSeconds: 0, // 0 = désactivé
     countdownManuallySet: false, // évite qu'une suggestion de mode n'écrase un choix déjà fait
-    // 'freeform' (libre, sans masque) | 'graffiti' | 'lighttrails' | 'startrails'
-    shootingMode: 'freeform',
+    // 'longexposure' (pose longue, sans masque) | 'olympus' (fond figé,
+    // façon Live Composite) | 'videotrace' (fond live + trainée isolée)
+    shootingMode: 'longexposure',
   };
 
   function load() {
@@ -29,6 +36,9 @@ const Settings = (() => {
       const parsed = raw ? JSON.parse(raw) : {};
       if ((parsed._version || 1) < SETTINGS_VERSION) {
         for (const key of OBSOLETE_KEYS) delete parsed[key];
+        if (parsed.shootingMode && SHOOTING_MODE_MIGRATION[parsed.shootingMode]) {
+          parsed.shootingMode = SHOOTING_MODE_MIGRATION[parsed.shootingMode];
+        }
       }
       return { ...DEFAULTS, ...parsed, _version: SETTINGS_VERSION };
     } catch {

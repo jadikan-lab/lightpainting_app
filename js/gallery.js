@@ -21,6 +21,7 @@ const Gallery = (() => {
       video.src = url;
       video.muted = true;
       video.playsInline = true;
+      video.preload = 'auto'; // iOS Safari : sans preload, onloadedmetadata/onseeked peuvent ne jamais arriver
 
       video.onloadedmetadata = () => {
         video.currentTime = Math.min(0.3, (video.duration || 1) / 2);
@@ -72,6 +73,11 @@ const Gallery = (() => {
 
   async function renderGrid(gridEl, emptyEl, onOpen, onLongPress) {
     const items = await MediaDB.getAllMedia();
+    // Révoque les object URLs du rendu précédent avant de vider la grille,
+    // sinon chaque ouverture de la galerie laisse fuir la mémoire des miniatures.
+    for (const oldImg of gridEl.querySelectorAll('img')) {
+      if (oldImg.src.startsWith('blob:')) URL.revokeObjectURL(oldImg.src);
+    }
     gridEl.innerHTML = '';
     emptyEl.hidden = items.length > 0;
 

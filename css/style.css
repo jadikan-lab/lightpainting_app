@@ -75,7 +75,8 @@ body {
 }
 
 #viewfinder,
-#accumulator {
+#accumulator,
+#preview-overlay {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -91,6 +92,13 @@ body {
      reste laisse voir la caméra en direct sans qu'aucun JS n'ait à gérer
      la visibilité de l'un ou l'autre. */
   mix-blend-mode: lighten;
+}
+
+#preview-overlay {
+  pointer-events: none;
+  /* Contenu déjà composé (fond + trainée isolée) par capture-engine.js —
+     pas de mode de fusion ici, ce calque recouvre simplement la vidéo et
+     l'accumulateur bruts pendant les modes "olympus"/"videotrace". */
 }
 
 #viewfinder.mirror-preview {

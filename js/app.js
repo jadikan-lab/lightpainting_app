@@ -2,6 +2,7 @@
 (() => {
   const viewfinder = document.getElementById('viewfinder');
   const accumulator = document.getElementById('accumulator');
+  const previewOverlay = document.getElementById('preview-overlay');
   const cameraStatus = document.getElementById('camera-status');
   const resBadge = document.getElementById('res-badge');
   const recIndicator = document.getElementById('rec-indicator');
@@ -48,6 +49,7 @@
   const btnSettingsClose = document.getElementById('btn-settings-close');
   const toggleVideoRecording = document.getElementById('toggle-video-recording');
   const segmentShootingMode = document.getElementById('segment-shooting-mode');
+  const shootingModeHint = document.getElementById('shooting-mode-hint');
   const segmentPhotoFormat = document.getElementById('segment-photo-format');
   const segmentCountdown = document.getElementById('segment-countdown');
   const toggleGrid = document.getElementById('toggle-grid');
@@ -58,14 +60,10 @@
 
   const ALL_SCREENS = [screenCamera, screenGallery, screenViewer, screenReview, screenSettings];
 
-  // Modes façon Huawei : le masquage v2 ne coûtant plus rien pendant la
-  // capture (calculé une seule fois à l'arrêt), la sensibilité redevient un
-  // paramètre pertinent à décliner par type de sujet.
-  const SHOOTING_MODE_PARAMS = {
-    freeform: { motionMask: false, sensitivity: 'medium' },
-    graffiti: { motionMask: true, sensitivity: 'high' },
-    lighttrails: { motionMask: true, sensitivity: 'medium' },
-    startrails: { motionMask: false, sensitivity: 'medium' },
+  const SHOOTING_MODE_HINTS = {
+    longexposure: 'Décor et trainée se mélangent, comme une vraie pose longue',
+    olympus: 'Fond figé et net, seule la trainée s\'accumule par-dessus',
+    videotrace: 'Fond vidéo en direct, la trainée forte est isolée par-dessus',
   };
 
   let isCapturing = false;
@@ -146,18 +144,20 @@
       updateMirrorPreview();
       updateTorchUI();
       updateZoomUI();
-      CaptureEngine.init(viewfinder, accumulator);
+      CaptureEngine.init(viewfinder, accumulator, previewOverlay);
     } catch (err) {
       cameraStatus.hidden = false;
       cameraStatus.textContent = "Impossible d'accéder à la caméra. Vérifiez les autorisations.";
     }
   }
 
+  let latestThumbUrl = null;
   async function refreshLatestThumb() {
     const items = await MediaDB.getAllMedia();
     if (items.length > 0) {
-      const url = URL.createObjectURL(items[0].thumbnail || items[0].blob);
-      thumbLatest.src = url;
+      if (latestThumbUrl) URL.revokeObjectURL(latestThumbUrl);
+      latestThumbUrl = URL.createObjectURL(items[0].thumbnail || items[0].blob);
+      thumbLatest.src = latestThumbUrl;
       thumbLatest.hidden = false;
     }
   }
@@ -183,12 +183,14 @@
     } else {
       clearInterval(recTimerInterval);
       recTimerInterval = null;
+      previewOverlay.hidden = true;
     }
   }
 
   function handleCaptureStartError() {
     if (!isCapturing) return;
     setCapturingUI(false);
+    releaseWakeLock();
     Camera.unlockAutoAdjustments();
     if (Recorder.isRecording()) Recorder.stop();
     Timelapse.stopCollecting();
@@ -227,21 +229,40 @@
     else startCapture();
   }
 
+  // Empêche le verrouillage de l'écran pendant une capture : sur une pose
+  // longue de plusieurs minutes, l'extinction auto de l'écran couperait le
+  // flux caméra et ruinerait la prise. Repli silencieux si non supporté.
+  let wakeLock = null;
+  async function acquireWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch { wakeLock = null; }
+  }
+  function releaseWakeLock() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  // Le wake lock est perdu quand l'app passe en arrière-plan : on le
+  // re-demande au retour si une capture est toujours en cours.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isCapturing) acquireWakeLock();
+  });
+
   async function startCapture() {
     if (isCapturing) return;
     // Sur Safari/iOS, la prévisualisation peut s'afficher sans que la lecture
     // du flux ait réellement démarré (politique anti-autoplay) — on retente
     // ici, dans le geste utilisateur, ce qui lève ce blocage le cas échéant.
     if (viewfinder.paused) await viewfinder.play().catch(() => {});
+    acquireWakeLock();
     await Camera.lockAutoAdjustments();
     setCapturingUI(true);
     const mirror = Camera.getFacingMode() === 'user' && Settings.get('mirrorFrontFinal');
-    const modeParams = SHOOTING_MODE_PARAMS[Settings.get('shootingMode')] || SHOOTING_MODE_PARAMS.freeform;
+    const captureStyle = Settings.get('shootingMode');
+    previewOverlay.hidden = captureStyle === 'longexposure';
     CaptureEngine.start({
       mirror,
       format: Settings.get('photoFormat'),
-      motionMask: modeParams.motionMask,
-      sensitivity: modeParams.sensitivity,
+      captureStyle,
+      sensitivity: 'medium',
       onError: handleCaptureStartError,
     });
     if (Settings.get('videoRecordingEnabled')) Recorder.start(Camera.getStream());
@@ -251,6 +272,7 @@
   async function stopCapture() {
     if (!isCapturing) return;
     setCapturingUI(false);
+    releaseWakeLock();
     Camera.unlockAutoAdjustments();
 
     try {
@@ -505,6 +527,7 @@
     for (const btn of segmentShootingMode.children) {
       btn.classList.toggle('is-active', btn.dataset.value === values.shootingMode);
     }
+    shootingModeHint.textContent = SHOOTING_MODE_HINTS[values.shootingMode] || SHOOTING_MODE_HINTS.longexposure;
     for (const btn of segmentPhotoFormat.children) {
       btn.classList.toggle('is-active', btn.dataset.value === values.photoFormat);
     }
@@ -617,11 +640,6 @@
     const btn = e.target.closest('.segmented-btn');
     if (!btn) return;
     Settings.set('shootingMode', btn.dataset.value);
-    // Les étoiles bougent trop peu pour se passer d'un trépied : on suggère
-    // un retardateur, sans écraser un choix déjà fait manuellement.
-    if (btn.dataset.value === 'startrails' && !Settings.get('countdownManuallySet')) {
-      Settings.set('countdownSeconds', 5);
-    }
     applySettingsToUI();
   });
 
