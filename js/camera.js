@@ -22,6 +22,8 @@ const Camera = (() => {
     };
   }
 
+  const GET_USER_MEDIA_TIMEOUT_MS = 10000;
+
   function stopStream() {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
@@ -29,13 +31,27 @@ const Camera = (() => {
     }
   }
 
+  // getUserMedia() peut rester en attente indéfiniment sur certains
+  // appareils/états de permission (jamais résolue ni rejetée) — sans
+  // timeout, l'app reste bloquée sur "Chargement de la caméra…" sans
+  // aucun message. Ce timeout garantit un retour explicite dans tous les cas.
+  function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('getUserMedia-timeout')), ms);
+      promise.then(
+        (value) => { clearTimeout(timer); resolve(value); },
+        (err) => { clearTimeout(timer); reject(err); },
+      );
+    });
+  }
+
   async function start(mode) {
     stopStream();
     try {
-      stream = await navigator.mediaDevices.getUserMedia(buildConstraints(mode));
+      stream = await withTimeout(navigator.mediaDevices.getUserMedia(buildConstraints(mode)), GET_USER_MEDIA_TIMEOUT_MS);
     } catch (err) {
       // Fallback si la contrainte facingMode idéale échoue sur ce device.
-      stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+      stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: false, video: true }), GET_USER_MEDIA_TIMEOUT_MS);
     }
     facingMode = mode;
     videoEl.srcObject = stream;
