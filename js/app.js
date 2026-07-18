@@ -369,11 +369,117 @@
     else openViewer(id);
   }
 
+  // Pinch pour zoomer + glisser pour déplacer (photos uniquement) dans la
+  // visionneuse plein écran, plus un double-tap pour zoomer/dézoomer vite.
+  function attachPinchZoom(container) {
+    const MIN_SCALE = 1;
+    const MAX_SCALE = 4;
+    let scale = 1;
+    let panX = 0;
+    let panY = 0;
+    const pointers = new Map();
+    let pinchStartDist = 0;
+    let pinchStartScale = 1;
+    let panStart = null;
+    let panOrigin = { x: 0, y: 0 };
+    let lastTapAt = 0;
+
+    const getImg = () => container.querySelector('img');
+    const clampScale = (s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+
+    function applyTransform() {
+      const img = getImg();
+      if (img) img.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+
+    function setGesturing(active) {
+      const img = getImg();
+      if (img) img.classList.toggle('is-gesturing', active);
+    }
+
+    function reset() {
+      scale = 1;
+      panX = 0;
+      panY = 0;
+      setGesturing(false);
+      applyTransform();
+    }
+
+    function endPointer(e) {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinchStartDist = 0;
+      if (pointers.size === 1 && scale > 1) {
+        // Transition pincement -> glisser : un doigt reste posé, on
+        // réamorce le pan depuis sa position actuelle plutôt que d'attendre
+        // un nouveau pointerdown (qui n'arrive pas dans ce cas).
+        const [remaining] = [...pointers.values()];
+        panStart = { x: remaining.x, y: remaining.y };
+        panOrigin = { x: panX, y: panY };
+      } else if (pointers.size === 0) {
+        setGesturing(false);
+        panStart = null;
+        if (scale <= 1) reset();
+      }
+    }
+
+    container.addEventListener('pointerdown', (e) => {
+      if (!getImg()) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      setGesturing(true);
+      if (pointers.size === 2) {
+        const [p1, p2] = [...pointers.values()];
+        pinchStartDist = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
+        pinchStartScale = scale;
+        panStart = null;
+      } else if (pointers.size === 1 && scale > 1) {
+        panStart = { x: e.clientX, y: e.clientY };
+        panOrigin = { x: panX, y: panY };
+      }
+    });
+
+    container.addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 2) {
+        const [p1, p2] = [...pointers.values()];
+        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
+        scale = clampScale(pinchStartScale * (dist / pinchStartDist));
+        applyTransform();
+      } else if (pointers.size === 1 && panStart) {
+        panX = panOrigin.x + (e.clientX - panStart.x);
+        panY = panOrigin.y + (e.clientY - panStart.y);
+        applyTransform();
+      }
+    });
+
+    container.addEventListener('pointerup', endPointer);
+    container.addEventListener('pointercancel', endPointer);
+    container.addEventListener('pointerleave', endPointer);
+
+    container.addEventListener('pointerup', (e) => {
+      if (pointers.size > 0) return;
+      const now = Date.now();
+      if (now - lastTapAt < 300) {
+        scale = scale > 1 ? 1 : 2.5;
+        panX = 0;
+        panY = 0;
+        applyTransform();
+      }
+      lastTapAt = now;
+    });
+
+    return { reset };
+  }
+
+  const viewerZoom = attachPinchZoom(viewerMedia);
+
   async function openViewer(id) {
     const media = await MediaDB.getMedia(id);
     if (!media) return;
     currentViewerMedia = media;
     currentViewerUrl = Gallery.renderViewer(viewerMedia, media);
+    viewerZoom.reset();
     showScreen('viewer');
   }
 

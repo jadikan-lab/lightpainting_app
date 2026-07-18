@@ -481,6 +481,19 @@ body {
   border-radius: var(--radius-md);
 }
 
+#viewer-media {
+  touch-action: none;
+}
+
+#viewer-media img {
+  transform-origin: center center;
+  transition: transform 0.2s ease;
+}
+
+#viewer-media img.is-gesturing {
+  transition: none;
+}
+
 .viewer-actions {
   display: flex;
   justify-content: center;
