@@ -1,0 +1,25 @@
+name: Déploiement FTP (production)
+
+on:
+  push:
+    branches: [stable]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Déployer via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: www/lightpainting_app/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            README.md
