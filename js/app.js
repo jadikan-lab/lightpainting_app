@@ -51,9 +51,6 @@
   const segmentCountdown = document.getElementById('segment-countdown');
   const toggleGrid = document.getElementById('toggle-grid');
   const toggleMirror = document.getElementById('toggle-mirror');
-  const toggleHaptics = document.getElementById('toggle-haptics');
-  const toggleMotionMask = document.getElementById('toggle-motion-mask');
-  const segmentSensitivity = document.getElementById('segment-sensitivity');
   const toggleTimelapse = document.getElementById('toggle-timelapse');
   const storageSummary = document.getElementById('storage-summary');
   const btnClearGallery = document.getElementById('btn-clear-gallery');
@@ -90,10 +87,6 @@
   function formatBytes(bytes) {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-  }
-
-  function vibrate(pattern) {
-    if (Settings.get('haptics') && navigator.vibrate) navigator.vibrate(pattern);
   }
 
   function updateResBadge() {
@@ -166,7 +159,6 @@
     btnGallery.disabled = active;
     btnSettings.disabled = active;
     recIndicator.hidden = !active;
-    accumulator.classList.toggle('is-live', active);
 
     if (active) {
       recStartedAt = Date.now();
@@ -206,7 +198,6 @@
     let remaining = seconds;
     countdownNumber.textContent = String(remaining);
     countdownOverlay.hidden = false;
-    vibrate(15);
     countdownIntervalId = setInterval(() => {
       remaining -= 1;
       if (remaining <= 0) {
@@ -215,7 +206,6 @@
         return;
       }
       countdownNumber.textContent = String(remaining);
-      vibrate(10);
     }, 1000);
   }
 
@@ -228,7 +218,6 @@
 
   async function startCapture() {
     if (isCapturing) return;
-    vibrate(15);
     // Sur Safari/iOS, la prévisualisation peut s'afficher sans que la lecture
     // du flux ait réellement démarré (politique anti-autoplay) — on retente
     // ici, dans le geste utilisateur, ce qui lève ce blocage le cas échéant.
@@ -239,8 +228,6 @@
     CaptureEngine.start({
       mirror,
       format: Settings.get('photoFormat'),
-      motionMask: Settings.get('motionMask'),
-      sensitivity: Settings.get('motionSensitivity'),
       onError: handleCaptureStartError,
     });
     if (Settings.get('videoRecordingEnabled')) Recorder.start(Camera.getStream());
@@ -249,7 +236,6 @@
 
   async function stopCapture() {
     if (!isCapturing) return;
-    vibrate([12, 40, 12]);
     setCapturingUI(false);
     Camera.unlockAutoAdjustments();
 
@@ -345,7 +331,6 @@
   function enterSelectionMode(id) {
     selectionMode = true;
     selectedIds = new Set([id]);
-    vibrate(15);
     updateSelectionUI();
   }
 
@@ -405,13 +390,7 @@
     }
     toggleGrid.checked = values.gridOverlay;
     toggleMirror.checked = values.mirrorFrontFinal;
-    toggleHaptics.checked = values.haptics;
     gridOverlay.hidden = !values.gridOverlay;
-
-    toggleMotionMask.checked = values.motionMask;
-    for (const btn of segmentSensitivity.children) {
-      btn.classList.toggle('is-active', btn.dataset.value === values.motionSensitivity);
-    }
     toggleTimelapse.checked = values.timelapseEnabled;
   }
 
@@ -533,21 +512,6 @@
   toggleMirror.addEventListener('change', () => {
     Settings.set('mirrorFrontFinal', toggleMirror.checked);
     updateMirrorPreview();
-  });
-
-  toggleHaptics.addEventListener('change', () => {
-    Settings.set('haptics', toggleHaptics.checked);
-  });
-
-  toggleMotionMask.addEventListener('change', () => {
-    Settings.set('motionMask', toggleMotionMask.checked);
-  });
-
-  segmentSensitivity.addEventListener('click', (e) => {
-    const btn = e.target.closest('.segmented-btn');
-    if (!btn) return;
-    Settings.set('motionSensitivity', btn.dataset.value);
-    applySettingsToUI();
   });
 
   toggleTimelapse.addEventListener('change', () => {

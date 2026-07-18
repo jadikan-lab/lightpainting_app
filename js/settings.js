@@ -1,18 +1,16 @@
 // Préférences utilisateur, persistées en localStorage.
 const Settings = (() => {
   const KEY = 'lightpainting-settings';
-  // v2 : le masque de mouvement s'est révélé peu fiable en conditions réelles
-  // (trainées non accumulées sur certains appareils) — repassé à false par
-  // défaut, et forcé une fois pour les utilisateurs ayant déjà la v1 stockée.
-  const SETTINGS_VERSION = 2;
+  // v3 : suppression des vibrations (jugées inutiles) et du masque de
+  // mouvement (resté noir/saccadé en conditions réelles, remplacé par la
+  // vue combinée vidéo+trainées) — clés obsolètes purgées au chargement.
+  const SETTINGS_VERSION = 3;
+  const OBSOLETE_KEYS = ['haptics', 'motionMask', 'motionSensitivity'];
 
   const DEFAULTS = {
     photoFormat: 'jpeg', // 'jpeg' | 'png'
     gridOverlay: false,
     mirrorFrontFinal: false,
-    haptics: true,
-    motionMask: false,
-    motionSensitivity: 'medium', // 'low' | 'medium' | 'high'
     // Enregistrer la vidéo brute du processus en même temps que la capture
     // fait concourir l'encodeur avec la boucle de composition du canvas pour
     // les mêmes ressources — désactivé par défaut pour garantir des trainées
@@ -27,7 +25,7 @@ const Settings = (() => {
       const raw = localStorage.getItem(KEY);
       const parsed = raw ? JSON.parse(raw) : {};
       if ((parsed._version || 1) < SETTINGS_VERSION) {
-        delete parsed.motionMask;
+        for (const key of OBSOLETE_KEYS) delete parsed[key];
       }
       return { ...DEFAULTS, ...parsed, _version: SETTINGS_VERSION };
     } catch {

@@ -84,13 +84,13 @@ body {
 }
 
 #accumulator {
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-
-#accumulator.is-live {
-  opacity: 1;
+  /* La vidéo live reste visible en permanence sous le canvas : le mode de
+     fusion "lighten" ne montre que les pixels où le canvas est plus lumineux
+     que la vidéo en dessous — c'est exactement la trainée accumulée, le
+     reste laisse voir la caméra en direct sans qu'aucun JS n'ait à gérer
+     la visibilité de l'un ou l'autre. */
+  mix-blend-mode: lighten;
 }
 
 #viewfinder.mirror-preview {
