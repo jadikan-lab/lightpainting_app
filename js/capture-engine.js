@@ -21,6 +21,13 @@
 // nettoyé est recalculé périodiquement (2-3x/seconde, pas à chaque frame)
 // sur un canvas de preview séparé — assez pour voir l'effet en direct sans
 // jamais saccader la vidéo elle-même.
+//
+// Mode Pro : un seuil de luminosité (curseur de sensibilité) peut être
+// appliqué à CHAQUE frame avant qu'elle n'entre dans l'accumulation, via un
+// filtre canvas natif (gratuit, pas de lecture pixel par pixel). Utile
+// quand l'auto-exposition du téléphone pompe brièvement au passage de la
+// lumière : sans seuil, ce sursaut reste gravé pour toujours dans le fond
+// (« lighten » garde le maximum vu à vie), même s'il n'a duré qu'une frame.
 const CaptureEngine = (() => {
   const RESIZE_TIMEOUT_MS = 4000;
   const BACKGROUND_SETTLE_MS = 300;
@@ -75,9 +82,25 @@ const CaptureEngine = (() => {
     ctx.restore();
   }
 
+  // Mode Pro (maskSensitivity numérique) : écrase les luminosités faibles/
+  // moyennes vers le noir *avant* l'accumulation, via un filtre canvas natif
+  // (GPU, gratuit — pas de lecture pixel par pixel). Sans ça, un sursaut
+  // d'une seule frame (auto-exposition qui pompe quand la lumière passe près
+  // de la caméra, lumière parasite qui rebondit sur le décor) reste gravé à
+  // jamais dans le fond via "lighten", qui garde le maximum vu à vie.
+  function cssThresholdFilterFor(sensitivity) {
+    const clamped = Math.min(8, Math.max(0.5, sensitivity));
+    const brightness = 62 - clamped * 3; // ~60% à 0.5, ~38% à 8
+    const contrast = 110 + clamped * 35; // ~128% à 0.5, ~390% à 8
+    return `brightness(${brightness}%) contrast(${contrast}%)`;
+  }
+
   function drawFrame() {
     ctx.globalCompositeOperation = 'lighten';
+    const applyThreshold = typeof maskSensitivity === 'number';
+    if (applyThreshold) ctx.filter = cssThresholdFilterFor(maskSensitivity);
     withMirror(() => ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height));
+    if (applyThreshold) ctx.filter = 'none';
     frameCount++;
     rafId = requestAnimationFrame(drawFrame);
   }

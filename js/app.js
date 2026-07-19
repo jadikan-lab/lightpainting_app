@@ -540,11 +540,10 @@
     shootingModeHint.textContent = SHOOTING_MODE_HINTS[values.shootingMode] || SHOOTING_MODE_HINTS.longexposure;
     toggleProMode.checked = values.proMode;
 
-    // Seul 'olympus' masque encore (isole la trainée sur fond figé) — la
-    // sensibilité n'a plus de sens pour 'videotrace', qui superpose tout
-    // l'accumulé sans seuil.
-    const maskingModeActive = values.shootingMode === 'olympus';
-    sensitivitySlider.hidden = !(values.proMode && maskingModeActive);
+    // Le seuil du Mode Pro s'applique désormais à l'accumulation elle-même
+    // (filtre par frame, voir capture-engine.js) donc utile dans les 3
+    // modes — pas seulement pour le masque d''olympus'.
+    sensitivitySlider.hidden = !values.proMode;
     sensitivitySlider.value = values.maskSensitivityValue;
   }
 
