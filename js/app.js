@@ -540,22 +540,27 @@
     shootingModeHint.textContent = SHOOTING_MODE_HINTS[values.shootingMode] || SHOOTING_MODE_HINTS.longexposure;
     toggleProMode.checked = values.proMode;
 
-    // Le seuil du Mode Pro s'applique désormais à l'accumulation elle-même
-    // (filtre par frame, voir capture-engine.js) donc utile dans les 3
-    // modes — pas seulement pour le masque d''olympus'.
-    sensitivitySlider.hidden = !values.proMode;
+    // Le curseur permet d'affiner le seuil, mais un seuil par défaut
+    // s'applique déjà sans Mode Pro sur 'olympus'/'videotrace' (voir
+    // capture-engine.js) — sinon le bruit capteur en basse lumière finit par
+    // toucher toute l'image au bout d'assez de frames. Le curseur ne se
+    // justifie donc que si on veut le régler soi-même.
+    sensitivitySlider.hidden = !values.proMode || values.shootingMode === 'longexposure';
     sensitivitySlider.value = values.maskSensitivityValue;
     updateViewfinderFilter(values);
   }
 
   // Applique le même filtre de seuil sur la vidéo live que celui utilisé
-  // pendant l'accumulation (voir CaptureEngine.getThresholdFilterCss) : sans
-  // ça, bouger le curseur n'a aucun effet visible tant qu'une capture n'est
-  // pas en cours, ce qui rend le réglage impossible à calibrer à l'oeil.
+  // pendant l'accumulation (voir CaptureEngine.getThresholdFilterCss), pour
+  // que le réglage soit visible avant même de déclencher la capture. 'Pose
+  // longue' reste toujours brute (aucun filtre), même en Mode Pro.
   function updateViewfinderFilter(values = Settings.getAll()) {
-    viewfinder.style.filter = values.proMode
-      ? CaptureEngine.getThresholdFilterCss(values.maskSensitivityValue)
-      : '';
+    if (values.shootingMode === 'longexposure') {
+      viewfinder.style.filter = '';
+      return;
+    }
+    const sensitivity = values.proMode ? values.maskSensitivityValue : 'medium';
+    viewfinder.style.filter = CaptureEngine.getThresholdFilterCss(sensitivity);
   }
 
   function applySettingsToUI() {

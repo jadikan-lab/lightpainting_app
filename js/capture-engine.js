@@ -95,10 +95,24 @@ const CaptureEngine = (() => {
     return `brightness(${brightness}%) contrast(${contrast}%)`;
   }
 
+  // Mode Pro : maskSensitivity peut être un nombre (curseur continu) en plus
+  // des 3 préréglages faible/moyenne/élevée.
+  function resolveGain(sensitivity) {
+    return typeof sensitivity === 'number'
+      ? sensitivity
+      : (MASK_SENSITIVITY_GAIN[sensitivity] || MASK_SENSITIVITY_GAIN.medium);
+  }
+
   function drawFrame() {
     ctx.globalCompositeOperation = 'lighten';
-    const applyThreshold = typeof maskSensitivity === 'number';
-    if (applyThreshold) ctx.filter = cssThresholdFilterFor(maskSensitivity);
+    // Sans seuil, le bruit capteur (fort en basse lumière) finit par toucher
+    // TOUTE l'image au bout d'assez de frames : "lighten" garde le maximum
+    // vu à vie, et sur assez d'images, le bruit dépasse le seuil de bruit
+    // presque partout, même sans aucun vrai mouvement. Actif par défaut sur
+    // 'olympus'/'videotrace' (dont le principe même est un rendu propre) ;
+    // 'pose longue' reste volontairement brute, sans aucun traitement.
+    const applyThreshold = captureStyle !== 'longexposure';
+    if (applyThreshold) ctx.filter = cssThresholdFilterFor(resolveGain(maskSensitivity));
     withMirror(() => ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height));
     if (applyThreshold) ctx.filter = 'none';
     frameCount++;
@@ -151,11 +165,7 @@ const CaptureEngine = (() => {
     const accumData = smallAccumCtx.getImageData(0, 0, smallW, smallH);
     const bgData = smallBgCtx.getImageData(0, 0, smallW, smallH);
     const maskData = smallAccumCtx.createImageData(smallW, smallH);
-    // Mode Pro : maskSensitivity peut être un nombre (curseur continu) en
-    // plus des 3 préréglages faible/moyenne/élevée.
-    const gain = typeof maskSensitivity === 'number'
-      ? maskSensitivity
-      : (MASK_SENSITIVITY_GAIN[maskSensitivity] || MASK_SENSITIVITY_GAIN.medium);
+    const gain = resolveGain(maskSensitivity);
 
     const a = accumData.data;
     const b = bgData.data;
@@ -325,8 +335,10 @@ const CaptureEngine = (() => {
   // Exposé pour que l'écran caméra applique exactement le même filtre sur la
   // vidéo live (voir app.js) — le réglage doit se voir avant même de
   // déclencher la capture, pas seulement une fois l'accumulation démarrée.
-  function getThresholdFilterCss(value) {
-    return cssThresholdFilterFor(value);
+  // Accepte aussi bien un préréglage ('low'/'medium'/'high') que la valeur
+  // numérique du curseur Mode Pro.
+  function getThresholdFilterCss(sensitivity) {
+    return cssThresholdFilterFor(resolveGain(sensitivity));
   }
 
   return { init, start, stop, isRunning, getFrameCount, setSensitivity, getThresholdFilterCss };
