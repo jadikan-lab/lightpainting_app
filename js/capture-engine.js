@@ -322,5 +322,12 @@ const CaptureEngine = (() => {
     maskSensitivity = value;
   }
 
-  return { init, start, stop, isRunning, getFrameCount, setSensitivity };
+  // Exposé pour que l'écran caméra applique exactement le même filtre sur la
+  // vidéo live (voir app.js) — le réglage doit se voir avant même de
+  // déclencher la capture, pas seulement une fois l'accumulation démarrée.
+  function getThresholdFilterCss(value) {
+    return cssThresholdFilterFor(value);
+  }
+
+  return { init, start, stop, isRunning, getFrameCount, setSensitivity, getThresholdFilterCss };
 })();

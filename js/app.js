@@ -545,6 +545,17 @@
     // modes — pas seulement pour le masque d''olympus'.
     sensitivitySlider.hidden = !values.proMode;
     sensitivitySlider.value = values.maskSensitivityValue;
+    updateViewfinderFilter(values);
+  }
+
+  // Applique le même filtre de seuil sur la vidéo live que celui utilisé
+  // pendant l'accumulation (voir CaptureEngine.getThresholdFilterCss) : sans
+  // ça, bouger le curseur n'a aucun effet visible tant qu'une capture n'est
+  // pas en cours, ce qui rend le réglage impossible à calibrer à l'oeil.
+  function updateViewfinderFilter(values = Settings.getAll()) {
+    viewfinder.style.filter = values.proMode
+      ? CaptureEngine.getThresholdFilterCss(values.maskSensitivityValue)
+      : '';
   }
 
   function applySettingsToUI() {
@@ -682,6 +693,7 @@
     const value = Number(sensitivitySlider.value);
     Settings.set('maskSensitivityValue', value);
     CaptureEngine.setSensitivity(value);
+    viewfinder.style.filter = CaptureEngine.getThresholdFilterCss(value);
   });
 
   segmentPhotoFormat.addEventListener('click', (e) => {
